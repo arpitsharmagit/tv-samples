@@ -19,16 +19,26 @@ package com.android.tv.classics.workers
 import android.content.Context
 import android.net.Uri
 import android.util.Log
+import android.widget.Toast
+import androidx.navigation.Navigation
 import androidx.work.Worker
 import androidx.work.WorkerParameters
 import com.android.tv.classics.R
-import com.android.tv.classics.models.TvMediaBackground
+import com.android.tv.classics.fragments.NowPlayingFragment
+import com.android.tv.classics.jio.Constants
+import com.android.tv.classics.jio.JioAPI
+import com.android.tv.classics.jio.models.ChannelsResponse
+import com.android.tv.classics.models.*
 import com.android.tv.classics.utils.TvLauncherUtils
-import com.android.tv.classics.models.TvMediaDatabase
-import com.android.tv.classics.models.TvMediaMetadata
-import com.android.tv.classics.models.TvMediaCollection
+import com.androidnetworking.AndroidNetworking
+import com.androidnetworking.interceptors.HttpLoggingInterceptor
+import com.androidnetworking.interfaces.JSONObjectRequestListener
+import okhttp3.*
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.IOException
 import java.nio.charset.StandardCharsets
 
 /** Maps a JSONArray of strings */
@@ -46,10 +56,12 @@ class TvMediaSynchronizer(private val context: Context, params: WorkerParameters
     /** Helper data class used to pass results around functions */
     private data class FeedParseResult(
             val metadata: List<TvMediaMetadata>,
-            val collections: List<TvMediaCollection>,
-            val backgrounds: List<TvMediaBackground>)
+            val collections: List<TvMediaCollection>)
 
     override fun doWork(): Result = try {
+        AndroidNetworking.initialize(context)
+        AndroidNetworking.enableLogging() // simply enable logging
+        AndroidNetworking.enableLogging(HttpLoggingInterceptor.Level.BODY) // enabling logging with level
         synchronize(context)
         Result.success()
     } catch (exc: Exception) {
@@ -63,58 +75,56 @@ class TvMediaSynchronizer(private val context: Context, params: WorkerParameters
         private fun parseMediaFeed(context: Context): FeedParseResult {
             // Reads JSON input into a JSONArray
             // We are using a local file, in your app you most likely will be using a remote URL
-            val stream = context.resources.assets.open("media-feed.json")
-            val data = JSONObject(
-                    String(stream.readBytes(), StandardCharsets.UTF_8))
+            val data = JioAPI.GetChannels()
+//            val stream = context.resources.assets.open("jio-feed.json")
+//            val data = JSONObject(
+//                String(stream.readBytes(), StandardCharsets.UTF_8)
+//            )
 
             // Initializes an empty list to populate with metadata metadata
             val metadatas: MutableList<TvMediaMetadata> = mutableListOf()
 
-            // Traverses the feed and maps each collection
-            val feed = data.getJSONArray("feed")
-            val collections = feed.mapObject { obj ->
+            // Reads JSON input into a JSONArray
+            // We are using a local file, in your app you most likely will be using a remote URL
+            var genreStream = context.resources.assets.open("jio-genre-map.json")
+            var genreData = JSONObject(
+                String(genreStream.readBytes(), StandardCharsets.UTF_8)
+            )
 
+            // Traverses the feed and maps each genre
+            val genre = genreData.getJSONArray("genre")
+            val genres = genre.mapObject { obj ->
                 val collection = TvMediaCollection(
-                        id = obj.getString("id"),
-                        title = obj.getString("title"),
-                        description = obj.getString("description"),
-                        artUri = obj.getString("image")?.let { Uri.parse(it) })
-
-                // Traverses the collection and map each content item metadata
-                val subItemsMetadata = obj.getJSONArray("items").mapObject { subItem ->
-                    TvMediaMetadata(
-                            collectionId = collection.id,
-                            id = subItem.getString("id"),
-                            title = subItem.getString("title"),
-                            ratings = subItem.optJSONArray("ratings")?.mapString { x -> x },
-                            contentUri = subItem.getString("url")?.let { Uri.parse(it) }!!,
-                            playbackDurationMillis = subItem.getLong("duration") * 1000,
-                            year = subItem.getInt("year"),
-                            author = subItem.getString("director"),
-                            description = subItem.getString("description"),
-                            artUri = subItem.getString("art")?.let { Uri.parse(it) })
-                }
-
-                // Adds all the subitems to the flat list
-                metadatas.addAll(subItemsMetadata)
-
-                // Returns parsed collection
+                    id = obj.getString("id"),
+                    title = obj.getString("title"),
+                    description = obj.getString("description"),
+                    artUri = obj.getString("image")?.let { Uri.parse(it) })
                 collection
             }
 
-            // Gets background images from metadata feed as well
-            val bgArray = data.getJSONArray("backgrounds")
-            val backgrounds = (0 until bgArray.length()).map { idx ->
-                TvMediaBackground("$idx", Uri.parse(bgArray.getString(idx)))
+            // Traverses the feed and maps each collection
+            val channels = data.getJSONArray("result").mapObject { obj ->
+                // Traverses the collection and map each content item metadata
+                TvMediaMetadata(
+                    collectionId = obj.getString("channelCategoryId"),
+                    id = obj.getString("channel_id"),
+                    title = obj.getString("channel_name"),
+                    lang = obj.getString("channelLanguageId"),
+                    contentUri = (Constants.imageUrl + obj.getString("logoUrl"))?.let { Uri.parse(it) }!!,
+                    artUri = (Constants.imageUrl + obj.getString("logoUrl"))?.let { Uri.parse(it) })
             }
 
-            return FeedParseResult(metadatas, collections, backgrounds)
+            val myChannels = channels.filter { it.lang in listOf("1", "6", "3") }
+
+            metadatas.addAll(myChannels)
+            return FeedParseResult(metadatas, genres)
         }
 
         /** Parses metadata from our assets folder and synchronizes the database */
         @Synchronized fun synchronize(context: Context) {
             Log.d(TAG, "Starting synchronization work")
             val database = TvMediaDatabase.getInstance(context)
+
             val feed = parseMediaFeed(context)
 
             // Gets a list of the metadata IDs for comparisons
@@ -138,9 +148,6 @@ class TvMediaSynchronizer(private val context: Context, params: WorkerParameters
                         // Removes channels from TV launcher
                         TvLauncherUtils.removeChannel(context, it)
                     }
-            database.backgrounds().findAll()
-                    .filter { !feed.backgrounds.contains(it) }
-                    .forEach { database.backgrounds().delete(it) }
 
             // Upon insert, we will replace all metadata already added so we can update titles,
             // images, descriptions, etc. Note that we overloaded the `equals` function in our data
@@ -148,23 +155,24 @@ class TvMediaSynchronizer(private val context: Context, params: WorkerParameters
             // position.
             database.metadata().insert(*feed.metadata.toTypedArray())
             database.collections().insert(*feed.collections.toTypedArray())
-            database.backgrounds().insert(*feed.backgrounds.toTypedArray())
 
             // Inserts the first collection as the "default" channel
             val defaultChannelTitle = context.getString(R.string.app_name)
             val defaultChannelArtUri = TvLauncherUtils.resourceUri(
-                    context.resources, R.mipmap.ic_channel_logo)
+                    context.resources, R.drawable.ic_jasmine_logo)
             val defaultChannelCollection = feed.collections.first().copy(
                     title = defaultChannelTitle, artUri = defaultChannelArtUri)
             val defaultChannelUri = TvLauncherUtils.upsertChannel(
                     context, defaultChannelCollection,
                     database.metadata().findByCollection(defaultChannelCollection.id))
 
-            // Inserts the rest of the collections as channels that user can add to home screen
-            feed.collections.subList(1, feed.collections.size).forEach {
+//             Inserts the rest of the collections as channels that user can add to home screen
+            feed.collections.forEach {
                 TvLauncherUtils.upsertChannel(
                         context, it, database.metadata().findByCollection(it.id))
             }
         }
+
+
     }
 }

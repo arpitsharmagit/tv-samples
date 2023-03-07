@@ -25,6 +25,7 @@ import android.net.Uri
 import android.util.Log
 import android.util.Rational
 import android.util.Size
+import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.tvprovider.media.tv.PreviewChannel
 import androidx.tvprovider.media.tv.PreviewChannelHelper
@@ -168,7 +169,7 @@ class TvLauncherUtils private constructor() {
             }
 
             val channelLogoUri =
-                    collection.artUri ?: resourceUri(context.resources, R.mipmap.ic_channel_logo)
+                    collection.artUri ?: resourceUri(context.resources, R.drawable.ic_jasmine_logo)
 
             // This must match the desired intent filter in the manifest for VIEW intent action
             val appUri = Uri.parse("https://$host/channel/${collection.id}")
@@ -329,15 +330,7 @@ class TvLauncherUtils private constructor() {
             // 1. NEXT      - If position is NULL
             // 2. CONTINUE  - If position not NULL AND duration is not NULL
             // 3. UNKNOWN   - If position < 0 OR (position is not NULL AND duration is NULL)
-            programBuilder.setWatchNextType(metadata.playbackPositionMillis?.let { position ->
-                if (position > 0 && metadata.playbackDurationMillis?.let { it > 0 } == true) {
-                    Log.d(TAG, "Inferred watch next type: CONTINUE")
-                    TvContractCompat.WatchNextPrograms.WATCH_NEXT_TYPE_CONTINUE
-                } else {
-                    Log.d(TAG, "Inferred watch next type: UNKNOWN")
-                    WatchNextProgram.WATCH_NEXT_TYPE_UNKNOWN
-                }
-            } ?: TvContractCompat.WatchNextPrograms.WATCH_NEXT_TYPE_NEXT)
+            programBuilder.setWatchNextType(TvContractCompat.WatchNextPrograms.WATCH_NEXT_TYPE_CONTINUE)
 
             // This must match the desired intent filter in the manifest for VIEW intent action
             programBuilder.setIntentUri(Uri.parse(
@@ -397,6 +390,14 @@ class TvLauncherUtils private constructor() {
                     null
                 }
             }
+        }
+        
+        fun showToast(context: Context, message: String) {
+            Toast.makeText(context,message, Toast.LENGTH_SHORT)
+        }
+
+        fun showToastLong(context: Context, message: String) {
+            Toast.makeText(context,message, Toast.LENGTH_LONG)
         }
     }
 }

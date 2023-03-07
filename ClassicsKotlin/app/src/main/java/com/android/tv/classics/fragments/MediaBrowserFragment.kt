@@ -41,6 +41,7 @@ import android.animation.ValueAnimator
 import android.graphics.Bitmap
 import android.graphics.drawable.Drawable
 import android.media.ThumbnailUtils
+import androidx.appcompat.content.res.AppCompatResources
 import androidx.core.graphics.ColorUtils
 import androidx.core.graphics.drawable.toBitmap
 import androidx.leanback.widget.DiffCallback
@@ -51,6 +52,7 @@ import coil.api.getAny
 import coil.bitmappool.BitmapPool
 import coil.transform.Transformation
 import com.android.tv.classics.presenters.TvMediaMetadataPresenter
+import com.android.tv.classics.utils.TvLauncherUtils
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -95,6 +97,7 @@ class MediaBrowserFragment : BrowseSupportFragment() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        badgeDrawable = AppCompatResources.getDrawable(requireContext(), R.drawable.ic_jasmine_logo)
         title = getString(R.string.app_name)
         headersState = BrowseSupportFragment.HEADERS_DISABLED
         isHeadersTransitionOnBackEnabled = true
@@ -160,8 +163,11 @@ class MediaBrowserFragment : BrowseSupportFragment() {
 
         // Pick a random background for our fragment
         backgroundDrawable = lifecycleScope.async(Dispatchers.IO) {
-            val backgroundUrl = database.backgrounds().findAll().shuffled().firstOrNull()?.uri
-            Coil.getAny(backgroundUrl ?: R.mipmap.bg_browse_fallback)
+            val backgroundList = listOf("tealbg","smoothredbg","skybluebg","seagreanbg",
+                "orangebg","jetblackbg","diffbluebg","bg5","bg4","bg3")
+            val drawableId = resources.getIdentifier(backgroundList.shuffled().first(), "drawable", requireContext().packageName)
+            val uri = context?.let { TvLauncherUtils.resourceUri(it.resources, drawableId) }
+            Coil.getAny(uri ?: R.drawable.bg3)
         }
     }
 
@@ -249,7 +255,7 @@ class MediaBrowserFragment : BrowseSupportFragment() {
         }
 
         // Add all new rows at once using our diff callback for a smooth animation
-        adapter.setItems(collectionRows + creditsRow, listRowDiffCallback)
+        adapter.setItems(collectionRows, listRowDiffCallback)
 
         // If we are being requested to scroll to a specific channel, find its index now
         // NOTE: We can't use args by navArgs() because this fragment is startDestination

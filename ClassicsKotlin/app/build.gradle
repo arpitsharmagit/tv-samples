@@ -18,14 +18,14 @@ apply plugin: 'com.android.application'
 apply plugin: 'kotlin-android'
 apply plugin: 'kotlin-android-extensions'
 apply plugin: 'kotlin-kapt'
-apply plugin: "androidx.navigation.safeargs"
+apply plugin: 'androidx.navigation.safeargs'
 
 android {
     compileSdkVersion 29
 
     defaultConfig {
         applicationId "com.android.tv.classics"
-        minSdkVersion 21
+        minSdkVersion 26
         targetSdkVersion 29
         versionCode 1
         versionName "1.0"
@@ -60,6 +60,9 @@ android {
         }
     }
 
+    buildFeatures {
+        viewBinding true
+    }
     // Necessary for Robolectric (Unit tests)
     testOptions {
         unitTests {
@@ -70,6 +73,8 @@ android {
 }
 
 dependencies {
+    implementation 'org.chromium.net:cronet-api:76.3809.111'
+
 
     // Kotlin lang
     def coroutines_version = "1.1.0"
@@ -83,14 +88,10 @@ dependencies {
     implementation 'androidx.leanback:leanback:1.0.0'
     implementation 'androidx.palette:palette-ktx:1.0.0'
     implementation 'androidx.appcompat:appcompat:1.1.0'
-    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.2.0'
     implementation 'androidx.constraintlayout:constraintlayout:1.1.3'
 
     // TV provider support library
     implementation 'androidx.tvprovider:tvprovider:1.0.0'
-
-    // JSON parsing
-    implementation 'com.google.code.gson:gson:2.8.6'
 
     // Navigation library
     def nav_version = '2.2.1'
@@ -111,11 +112,28 @@ dependencies {
     def exoplayer_version = '2.11.3'
     implementation "com.google.android.exoplayer:exoplayer-core:$exoplayer_version"
     implementation "com.google.android.exoplayer:exoplayer-ui:$exoplayer_version"
+    implementation "com.google.android.exoplayer:exoplayer-hls:$exoplayer_version"
     implementation "com.google.android.exoplayer:extension-mediasession:$exoplayer_version"
     implementation "com.google.android.exoplayer:extension-leanback:$exoplayer_version"
+    implementation "com.google.android.exoplayer:extension-cronet:$exoplayer_version"
 
     // Coil
-    implementation 'io.coil-kt:coil:0.7.0'
+    def coilVersion = '0.7.0'
+    implementation "io.coil-kt:coil:$coilVersion"
+
+    //ViewBinding
+    implementation 'com.android.databinding:viewbinding:4.2.1'
+
+    // ViewModel
+    def lifeCycleVersion = '2.2.0'
+    implementation "androidx.lifecycle:lifecycle-extensions:$lifeCycleVersion"
+    implementation "androidx.lifecycle:lifecycle-runtime-ktx:$lifeCycleVersion"
+    implementation "androidx.lifecycle:lifecycle-viewmodel-ktx:$lifeCycleVersion"
+    implementation "androidx.lifecycle:lifecycle-livedata-ktx:$lifeCycleVersion"
+
+    // OkHttp
+    implementation 'com.squareup.okhttp3:okhttp:4.0.1'
+    implementation 'com.amitshekhar.android:jackson-android-networking:1.0.2'
 
     // Unit testing
     testImplementation 'androidx.test.ext:junit:1.1.1'

@@ -6,11 +6,13 @@ import android.view.ViewGroup
 import androidx.leanback.widget.ImageCardView
 import androidx.leanback.widget.Presenter
 import coil.api.load
+import coil.size.Scale
+import com.android.tv.classics.R
 import com.android.tv.classics.models.TvMediaMetadata
 import com.android.tv.classics.utils.TvLauncherUtils
 
 /** Default height in DP used for card presenters, larger than this results in rows overflowing */
-const val DEFAULT_CARD_HEIGHT: Int = 400
+const val DEFAULT_CARD_HEIGHT: Int = 150
 
 /** [Presenter] used to display a metadata item as an image card */
 class TvMediaMetadataPresenter(private val cardHeight: Int = DEFAULT_CARD_HEIGHT) : Presenter() {
@@ -22,7 +24,7 @@ class TvMediaMetadataPresenter(private val cardHeight: Int = DEFAULT_CARD_HEIGHT
                 isFocusable = true
                 isFocusableInTouchMode = true
                 // Set card background to dark gray while image loads
-                setBackgroundColor(Color.DKGRAY)
+                setBackgroundColor(Color.WHITE)
                 // Do not display text under the card image
                 infoVisibility = View.GONE
             })
@@ -40,6 +42,10 @@ class TvMediaMetadataPresenter(private val cardHeight: Int = DEFAULT_CARD_HEIGHT
         card.titleText = metadata.title
         card.contentDescription = metadata.title
         card.setMainImageDimensions(cardWidth, cardHeight)
-        card.mainImageView.load(metadata.artUri)
+        card.mainImageView.load(metadata.artUri){
+            placeholder(R.drawable.ic_launcher_background)
+            error(R.drawable.ic_launcher_background)
+            scale(Scale.FILL)
+        }
     }
 }

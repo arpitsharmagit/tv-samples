@@ -47,9 +47,13 @@ data class TvMediaMetadata(
 
         /** Each metadata item can only be part of one collection */
         var collectionId: String,
+        var playCount: Int = 0,
 
         /** Title displayed to user */
         var title: String,
+
+        /** language displayed to user */
+        var lang: String,
 
         /** Store a searchable version of the title as a property] */
         val searchableTitle: String = searchableText(title),
@@ -57,29 +61,8 @@ data class TvMediaMetadata(
         /** URI for the content to be played */
         var contentUri: Uri,
 
-        /** Author of the metadata content */
-        var author: String? = null,
-
-        /** Year in which the metadata content was released */
-        var year: Int? = null,
-
-        /** Duration in seconds of the metadata content */
-        var playbackDurationMillis: Long? = null,
-
-        /** Current playback position for this piece of content */
-        var playbackPositionMillis: Long? = null,
-
-        /** Content ratings (e.g. G, PG, R) */
-        var ratings: List<String>? = null,
-
         /** Content genres, from TvContractCompat.Programs.Genres */
         var genres: List<String>? = null,
-
-        /** Short description of the content shown to users */
-        var description: String? = null,
-
-        /** Track or episode number for this piece of metadata */
-        var trackNumber: Int? = null,
 
         /** URI pointing to the album or poster art */
         var artUri: Uri? = null,
@@ -88,7 +71,7 @@ data class TvMediaMetadata(
          * Aspect ratio for the art, must be one of the constants under
          * [TvContractCompat.PreviewPrograms]. Defaults to movie poster.
          */
-        var artAspectRatio: Int = TvContractCompat.PreviewPrograms.ASPECT_RATIO_MOVIE_POSTER,
+        var artAspectRatio: Int = TvContractCompat.PreviewPrograms.ASPECT_RATIO_4_3,
 
         /** Flag indicating if it's hidden from home screen channel */
         var hidden: Boolean = false,
@@ -97,28 +80,18 @@ data class TvMediaMetadata(
         var watchNext: Boolean = false,
 
         /** The type of program. Defaults to movie, must be one of PreviewProgramColumns.TYPE_... */
-        var programType: Int = TvContractCompat.PreviewProgramColumns.TYPE_MOVIE
+        var programType: Int = TvContractCompat.PreviewProgramColumns.TYPE_CHANNEL
 
 ) : Parcelable {
 
-    /**
-     * Determine if an instance of this class carries state based on whether the fields below have
-     * anything other than the default values.
-     */
-    private fun isStateless() = playbackDurationMillis == null && !hidden && !watchNext
-
     /** Compares only fields not related to the state */
-    override fun equals(other: Any?): Boolean = if (isStateless()) {
-        super.equals(other)
-    } else {
-        copy(playbackDurationMillis = null, hidden = false, watchNext = false).equals(other)
+    override fun equals(other: Any?): Boolean {
+        return super.equals(other)
     }
 
     /** We must override [hashCode] if we override the [equals] function */
-    override fun hashCode(): Int = if (isStateless()) {
-        super.hashCode()
-    } else {
-        copy(playbackDurationMillis = null, hidden = false, watchNext = false).hashCode()
+    override fun hashCode(): Int {
+        return super.hashCode()
     }
 
     /** Helper function used to copy as much information as possible into a program builder */
@@ -127,47 +100,11 @@ data class TvMediaMetadata(
         // Basic metadata
         builder.setContentId(id).setTitle(title).setType(programType)
 
-        // Author (director for movies, performer for songs)
-        author?.let { builder.setAuthor(it) }
-
-        // Blurb shown under the media title in the program card
-        description?.let { builder.setDescription(it) }
-
-        // Release date, possible formats are  "yyyy", "yyyy-MM-dd", and "yyyy-MM-ddTHH:mm:ssZ"
-        year?.let { builder.setReleaseDate(it.toString())}
-
-        // Track / episode number
-        trackNumber?.let { builder.setEpisodeNumber(it) }
-
-        // Duration of content, set in milliseconds
-        playbackDurationMillis?.let { builder.setDurationMillis(it.toInt()) }
-
-        // Position of playback, set in milliseconds
-        playbackPositionMillis?.let { builder.setLastPlaybackPositionMillis(it.toInt()) }
-
         // Album / poster art, which will have a specific aspect ratio
         artUri?.let {
             builder.setPosterArtUri(it)
             builder.setPosterArtAspectRatio(artAspectRatio)
         }
-
-        // Content ratings for this specific metadata
-        ratings?.let {
-            // Process each of the ratings in the set
-            val ratings = it.map {
-                // First chunk of each rating is the system, second the actual ratings
-                val parts = it.split(".", limit = 2)
-                val ratingSystem = parts.get(0)  // E.g. TV_US
-                val ratingValue = parts.getOrNull(1)  // E.g. PG
-                ratingValue?.let { rating ->
-                    TvContentRating.createRating("com.android.tv",
-                            ratingSystem,  "${ratingSystem}_$rating") }
-            }.filterNotNull()
-            builder.setContentRatings(ratings.toTypedArray())
-
-        } ?: builder.setContentRatings(arrayOf(TvContentRating.createRating(
-                // Fallback to UNRATED if content ratings is null
-                "null", "null", "null", null)))
     }
 
     companion object {
@@ -189,10 +126,8 @@ interface TvMediaMetadataDAO {
             "id as ${BaseColumns._ID}, " +
             "id as ${SearchManager.SUGGEST_COLUMN_INTENT_DATA_ID}, " +
             "title as ${SearchManager.SUGGEST_COLUMN_TEXT_1}, " +
-            "description as ${SearchManager.SUGGEST_COLUMN_TEXT_2}, " +
-            "artUri as ${SearchManager.SUGGEST_COLUMN_RESULT_CARD_IMAGE}, " +
-            "year as ${SearchManager.SUGGEST_COLUMN_PRODUCTION_YEAR}, " +
-            "playbackDurationMillis as ${SearchManager.SUGGEST_COLUMN_DURATION} " +
+            "lang as ${SearchManager.SUGGEST_COLUMN_TEXT_2}, " +
+            "artUri as ${SearchManager.SUGGEST_COLUMN_RESULT_CARD_IMAGE} " +
             "FROM tvmediametadata WHERE :title LIKE '%' || searchableTitle || '%'")
     fun contentProviderQuery(title: String): Cursor?
 
@@ -202,7 +137,7 @@ interface TvMediaMetadataDAO {
     @Query("SELECT * FROM tvmediametadata WHERE id = :id LIMIT 1")
     fun findById(id: String): TvMediaMetadata?
 
-    @Query("SELECT * FROM tvmediametadata WHERE collectionId = :collectionId")
+    @Query("SELECT * FROM tvmediametadata WHERE collectionId = :collectionId  order by playCount desc")
     fun findByCollection(collectionId: String): List<TvMediaMetadata>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)

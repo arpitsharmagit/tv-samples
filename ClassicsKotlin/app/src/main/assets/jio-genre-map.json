@@ -1,0 +1,68 @@
+{
+  "genre": [{
+    "id": 5,
+    "title": "Entertainment",
+    "description": "Entertainment Channels",
+    "image": "https://jioimages.cdn.jio.com/imagespublic/38/52/Entertainment_1584620980069_tv.jpg"
+  },{
+    "id": 6,
+    "title": "Movies",
+    "description": "Movies Channels",
+    "image": "https://jioimages.cdn.jio.com/imagespublic/logos/langGen/movies_1579517470920.jpg"
+  },{
+    "id": 7,
+    "title": "Kids",
+    "description": "Kids Channels",
+    "image": "https://jioimages.cdn.jio.com/imagespublic/logos/langGen/kids_1579517470920.jpg"
+  },{
+    "id": 8,
+    "title": "Sports",
+    "description": "Sports Channels",
+    "image": "https://jioimages.cdn.jio.com/imagespublic/logos/langGen/Sports_1579245819981.jpg"
+  },{
+    "id": 9,
+    "title": "Lifestyle",
+    "description": "Lifestyle Channels",
+    "image": "https://jioimages.cdn.jio.com/imagespublic/logos/langGen/lifestyle_1579517470920.jpg"
+  },{
+    "id": 10,
+    "title": "Infotainment",
+    "description": "Infotainment Channels",
+    "image": "https://jioimages.cdn.jio.com/imagespublic/logos/langGen/infotainment_1579517470920.jpg"
+  },{
+    "id": 12,
+    "title": "News",
+    "description": "News Channels",
+    "image": "https://jioimages.cdn.jio.com/imagespublic/logos/langGen/news_1579517470920.jpg"
+  },{
+    "id": 13,
+    "title": "Music",
+    "description": "Music Channels",
+    "image": "https://jioimages.cdn.jio.com/imagespublic/logos/langGen/Music_1579245819981.jpg"
+  },{
+    "id": 15,
+    "title": "Devotional",
+    "description": "Devotional Channels",
+    "image": "https://jioimages.cdn.jio.com/imagespublic/logos/langGen/devotional_1579517470920.jpg"
+  },{
+    "id": 16,
+    "title": "Business",
+    "description": "Business Channels",
+    "image": "https://jioimages.cdn.jio.com/imagespublic/logos/langGen/business_1579517470920.jpg"
+  },{
+    "id": 17,
+    "title": "Educational",
+    "description": "Educational Channels",
+    "image": "https://jioimages.cdn.jio.com/imagespublic/logos/langGen/educational_1579517470920.jpg"
+  },{
+    "id": 18,
+    "title": "Shopping",
+    "description": "Shopping Channels",
+    "image": "https://jioimages.cdn.jio.com/imagespublic/logos/langGen/shopping_1579517470920.jpg"
+  },{
+    "id": 19,
+    "title": "JioDarshan",
+    "description": "JioDarshan Channels",
+    "image": "https://jioimages.cdn.jio.com/imagespublic/logos/langGen/jiodarshan_1579517470920.jpg"
+  }]
+}

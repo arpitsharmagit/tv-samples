@@ -23,7 +23,9 @@
 
     <!-- Declare permissions used by our app -->
     <uses-permission android:name="${applicationId}.MEDIA" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
 
     <!-- Declare non-touchscreen capabilities -->
     <uses-feature
@@ -39,10 +41,12 @@
     <uses-permission android:name="com.android.providers.tv.permission.WRITE_EPG_DATA" />
 
     <application
+        android:name=".LiveTvApplication"
         android:allowBackup="true"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@drawable/ic_jasmine_logo"
         android:label="@string/app_name"
-        android:roundIcon="@mipmap/ic_launcher_round"
+        android:roundIcon="@drawable/ic_jasmine_banner"
+        android:banner="@drawable/ic_jasmine_banner"
         android:supportsRtl="true"
         android:theme="@style/AppTheme"
         android:fullBackupContent="true">
@@ -50,11 +54,12 @@
         <activity
             android:exported="true"
             android:name="com.android.tv.classics.MainActivity"
-            android:icon="@mipmap/ic_launcher"
-            android:logo="@mipmap/ic_app_banner"
-            android:banner="@mipmap/ic_app_banner"
+            android:icon="@drawable/ic_jasmine_logo"
+            android:logo="@drawable/ic_jasmine_banner"
+            android:banner="@drawable/ic_jasmine_banner"
             android:label="@string/app_name"
-            android:screenOrientation="landscape">
+            android:screenOrientation="landscape"
+            android:keepScreenOn="true">
 
             <!-- Used as the main entry point from the leanback launcher -->
             <intent-filter>
