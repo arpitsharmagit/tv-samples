@@ -50,7 +50,7 @@ public class LoginDialogFragment extends GuidedStepSupportFragment {
 
     @Override
     public void onCreateActions(@NonNull List<GuidedAction> actions, Bundle savedInstanceState) {
-        addEditableAction(actions, PHONE_NUMBER, "Phone Number","9310949577");
+        addNonEditableAction(actions, PHONE_NUMBER, "Phone Number","7906107828");
         addAction(actions, SEND_OTP, "SEND OTP");
         addEditableAction(actions, OTP, "OTP","");
         addAction(actions, VERIFY_OTP, "VERIFY ");
@@ -160,6 +160,16 @@ public class LoginDialogFragment extends GuidedStepSupportFragment {
                 .id(id)
                 .title(title)
                 .descriptionEditable(true)
+                .descriptionInputType(InputType.TYPE_CLASS_TEXT)
+                .descriptionEditInputType(InputType.TYPE_CLASS_TEXT)
+                .description(desc)
+                .build());
+    }
+    private static void addNonEditableAction(List<GuidedAction> actions, long id, String title, String desc) {
+        actions.add(new GuidedAction.Builder()
+                .id(id)
+                .title(title)
+                .descriptionEditable(false)
                 .descriptionInputType(InputType.TYPE_CLASS_TEXT)
                 .descriptionEditInputType(InputType.TYPE_CLASS_TEXT)
                 .description(desc)

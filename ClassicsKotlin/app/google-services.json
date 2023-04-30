@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "885991949122",
+    "project_id": "indiantv-1f2a4",
+    "storage_bucket": "indiantv-1f2a4.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:885991949122:android:d34c14d953be3c22967edb",
+        "android_client_info": {
+          "package_name": "com.android.tv.classics"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "885991949122-qvl2q05sv3j02tv3hprlhh6m40dvnmmf.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.android.tv.classics",
+            "certificate_hash": "e5a8ab0a2f8ecd2eb4d4beff38567baff7024575"
+          }
+        },
+        {
+          "client_id": "885991949122-87reo3qfh8fk4ko8g4tbmomm1551uoas.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC-DoJ53FXJ5MBsVm2B2cFr3Ipaxifw3qQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "885991949122-87reo3qfh8fk4ko8g4tbmomm1551uoas.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
