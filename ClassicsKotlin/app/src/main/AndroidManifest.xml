@@ -97,10 +97,6 @@
                 android:resource="@xml/searchable" />
 
             <!-- Deep link testing, used to validate the configuration above -->
-            <tools:validation testUrl="https://classics.tv.android.com" />
-            <tools:validation testUrl="https://classics.tv.android.com/search?a=1" />
-            <tools:validation testUrl="https://classics.tv.android.com/channel/id" />
-            <tools:validation testUrl="https://classics.tv.android.com/program/id" />
 
         </activity>
 

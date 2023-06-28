@@ -50,7 +50,7 @@ public class LoginDialogFragment extends GuidedStepSupportFragment {
 
     @Override
     public void onCreateActions(@NonNull List<GuidedAction> actions, Bundle savedInstanceState) {
-        addNonEditableAction(actions, PHONE_NUMBER, "Phone Number","7906107828");
+        addNonEditableAction(actions, PHONE_NUMBER, "Phone Number","9310949577"); //7906107828
         addAction(actions, SEND_OTP, "SEND OTP");
         addEditableAction(actions, OTP, "OTP","");
         addAction(actions, VERIFY_OTP, "VERIFY ");
