@@ -60,8 +60,8 @@ class TvMediaSynchronizer(private val context: Context, params: WorkerParameters
 
     override fun doWork(): Result = try {
         AndroidNetworking.initialize(context)
-        AndroidNetworking.enableLogging() // simply enable logging
-        AndroidNetworking.enableLogging(HttpLoggingInterceptor.Level.BODY) // enabling logging with level
+//        AndroidNetworking.enableLogging() // simply enable logging
+//        AndroidNetworking.enableLogging(HttpLoggingInterceptor.Level.BODY) // enabling logging with level
         synchronize(context)
         Result.success()
     } catch (exc: Exception) {

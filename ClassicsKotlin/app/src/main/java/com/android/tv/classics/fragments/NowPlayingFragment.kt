@@ -98,7 +98,7 @@ class NowPlayingFragment : VideoSupportFragment() {
      */
     private lateinit var mediaSessionConnector: MediaSessionConnector
 
-    override fun onVideoSizeChanged(width: Int, height: Int) { }
+//    override fun onVideoSizeChanged(width: Int, height: Int) { }
 
     /** Custom implementation of [PlaybackTransportControlGlue] */
     private inner class MediaPlayerGlue(context: Context, adapter: LeanbackPlayerAdapter) :

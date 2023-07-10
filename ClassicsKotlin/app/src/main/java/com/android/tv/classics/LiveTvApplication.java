@@ -56,8 +56,8 @@ public class LiveTvApplication extends Application {
 
         // init network
         AndroidNetworking.initialize(getApplicationContext(),HttpStore.getHttpClient());
-        AndroidNetworking.enableLogging(); // simply enable logging
-        AndroidNetworking.enableLogging(HttpLoggingInterceptor.Level.BODY); // enabling logging with level
+//        AndroidNetworking.enableLogging(); // simply enable logging
+//        AndroidNetworking.enableLogging(HttpLoggingInterceptor.Level.BODY); // enabling logging with level
         // start httpstore
         // initialise APIs
     }

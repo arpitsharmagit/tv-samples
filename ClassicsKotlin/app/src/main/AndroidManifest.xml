@@ -30,7 +30,7 @@
     <!-- Declare non-touchscreen capabilities -->
     <uses-feature
         android:name="android.hardware.touchscreen"
-        android:required="false" />
+        android:required="true" />
 
     <!-- Declare leanback feature requirement -->
     <uses-feature
@@ -43,19 +43,21 @@
     <application
         android:name=".LiveTvApplication"
         android:allowBackup="true"
-        android:icon="@drawable/ic_jasmine_logo"
         android:label="@string/app_name"
-        android:roundIcon="@drawable/ic_jasmine_banner"
-        android:banner="@drawable/ic_jasmine_banner"
         android:supportsRtl="true"
         android:theme="@style/AppTheme"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:logo="@mipmap/ic_launcher_round"
+        android:banner="@drawable/ic_jasmine_banner"
         android:fullBackupContent="true">
 
         <activity
             android:exported="true"
             android:name="com.android.tv.classics.MainActivity"
-            android:icon="@drawable/ic_jasmine_logo"
-            android:logo="@drawable/ic_jasmine_banner"
+            android:icon="@mipmap/ic_launcher"
+            android:roundIcon="@mipmap/ic_launcher_round"
+            android:logo="@mipmap/ic_launcher_round"
             android:banner="@drawable/ic_jasmine_banner"
             android:label="@string/app_name"
             android:screenOrientation="landscape"
@@ -65,6 +67,7 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+                <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
             <!-- Used as an entry point for channels and individual channel programs -->

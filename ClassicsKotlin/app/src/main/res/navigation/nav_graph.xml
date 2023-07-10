@@ -56,5 +56,14 @@
         android:id="@+id/action_to_login"
         app:destination="@id/login_dialog_fragment"
         app:launchSingleTop="true" />
+    <action
+        android:id="@+id/action_to_loginfragment"
+        app:destination="@id/loginFragment"
+        app:launchSingleTop="true" />
+    <fragment
+        android:id="@+id/loginFragment"
+        android:name="com.android.tv.classics.ui.login.LoginFragment"
+        android:label="fragment_login"
+        tools:layout="@layout/fragment_login" />
 
 </navigation>

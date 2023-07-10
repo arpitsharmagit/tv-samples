@@ -57,8 +57,8 @@ class MainActivity : FragmentActivity() {
         super.onCreate(savedInstanceState)
 
         AndroidNetworking.initialize(applicationContext)
-        AndroidNetworking.enableLogging() // simply enable logging
-        AndroidNetworking.enableLogging(HttpLoggingInterceptor.Level.BODY) // enabling logging with level
+//        AndroidNetworking.enableLogging() // simply enable logging
+//        AndroidNetworking.enableLogging(HttpLoggingInterceptor.Level.BODY) // enabling logging with level
 
         setContentView(R.layout.activity_main)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -91,7 +91,7 @@ class MainActivity : FragmentActivity() {
         }
         else{
             Navigation.findNavController(activity, R.id.fragment_container)
-                .navigate(NavGraphDirections.actionToLogin())
+                .navigate(NavGraphDirections.actionToLoginfragment())
         }
 
         // Navigates to other fragments based on Intent's action

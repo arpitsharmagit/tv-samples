@@ -1,5 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!--
+<?xml version="1.0" encoding="utf-8"?><!--
   ~ Copyright 2019 Google Inc. All rights reserved.
   ~
   ~ Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,4 +22,15 @@
     <!-- Used at the bottom of the browse fragment to credit sources -->
     <string name="credits">Credits: IMDb, Wikimedia Commons, Internet Archive</string>
     <string name="LoginDialog">JIO Login</string>
+    <!-- Strings related to login -->
+    <string name="prompt_email">Mobile No</string>
+    <string name="prompt_password">OTP</string>
+    <string name="action_send_otp">SEND</string>
+    <string name="action_send_otp_short">SEND</string>
+    <string name="action_sign_in">Verify</string>
+    <string name="action_sign_in_short">Verify</string>
+    <string name="welcome">"Welcome!"</string>
+    <string name="invalid_username">Not a valid mobile no</string>
+    <string name="invalid_password">OTP must be >5 characters</string>
+    <string name="login_failed">"Login failed"</string>
 </resources>
