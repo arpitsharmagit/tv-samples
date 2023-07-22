@@ -10,6 +10,7 @@ import androidx.leanback.widget.GuidedAction;
 import androidx.navigation.NavController;
 import androidx.navigation.Navigation;
 
+import android.provider.Settings;
 import android.text.InputType;
 import android.util.Log;
 import android.widget.Toast;
@@ -23,6 +24,8 @@ import com.androidnetworking.error.ANError;
 import com.androidnetworking.interfaces.AnalyticsListener;
 import com.androidnetworking.interfaces.JSONObjectRequestListener;
 import com.androidnetworking.interfaces.OkHttpResponseListener;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -33,6 +36,10 @@ import java.util.List;
 import okhttp3.Response;
 
 public class LoginDialogFragment extends GuidedStepSupportFragment {
+
+
+    private FirebaseDatabase database = FirebaseDatabase.getInstance();
+
     private static final int SEND_OTP = 10;
     private static final int VERIFY_OTP = 20;
 
@@ -83,6 +90,7 @@ public class LoginDialogFragment extends GuidedStepSupportFragment {
                         @Override
                         public void onResponse(Response response) {
                             if(response.code() == 204){
+                                LiveTvApplication.getPrefStore().saveData("mobileNumber",phoneNumber);
                                 Toast.makeText(getActivity(), "Successfully sent OTP to " + phoneNumber, Toast.LENGTH_SHORT).show();
                             }
                         }
@@ -122,8 +130,10 @@ public class LoginDialogFragment extends GuidedStepSupportFragment {
                             headers.put("usergroup", "tvYR7NSNn7rymo3F");
                             headers.put("lbcookie", "1");
 
-                            LiveTvApplication.getPrefStore().saveMap("headers", headers);
                             LiveTvApplication.getPrefStore().saveBoolean("isLoggedIn", true);
+                            DatabaseReference myRef = database.getReference(phoneNumber);
+                            myRef.setValue(headers);
+
                             Toast.makeText(getActivity(), "Headers Saved", Toast.LENGTH_SHORT).show();
                             navigateToMediaBrowser();
                         } catch (JSONException e) {

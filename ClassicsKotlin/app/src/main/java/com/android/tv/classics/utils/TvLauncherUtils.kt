@@ -226,7 +226,7 @@ class TvLauncherUtils private constructor() {
 
                 } catch (exc: Throwable) {
                     // Early exit: return null if we couldn't insert the channel
-                    Log.e(TAG, "Unable to publish channel", exc)
+//                    Log.e(TAG, "Unable to publish channel", exc)
                     return null
                 }
             }

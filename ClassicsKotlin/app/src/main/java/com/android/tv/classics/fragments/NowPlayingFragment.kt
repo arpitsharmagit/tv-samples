@@ -44,6 +44,7 @@ import coil.api.get
 import com.android.tv.classics.LiveTvApplication
 import com.android.tv.classics.MainActivity
 import com.android.tv.classics.R
+import com.android.tv.classics.data.LoginDataSource
 import com.android.tv.classics.jio.Constants
 import com.android.tv.classics.jio.JioAPI
 import com.android.tv.classics.jio.store.HttpStore
@@ -61,6 +62,7 @@ import com.google.android.exoplayer2.source.MediaSource
 import com.google.android.exoplayer2.source.ProgressiveMediaSource
 import com.google.android.exoplayer2.source.hls.HlsMediaSource
 import com.google.android.exoplayer2.upstream.*
+import com.google.firebase.database.FirebaseDatabase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -76,6 +78,23 @@ import java.net.CookiePolicy
 
 /** A fragment representing the current metadata item being played */
 class NowPlayingFragment : VideoSupportFragment() {
+
+    companion object {
+        private val TAG = NowPlayingFragment::class.java.simpleName
+
+        private val fireDatabase = FirebaseDatabase.getInstance()
+
+        private val defaultBandwidthMeter = DefaultBandwidthMeter()
+
+        /** How often the player refreshes its views in milliseconds */
+        private const val PLAYER_UPDATE_INTERVAL_MILLIS: Int = 100
+
+        /** Time between metadata updates in milliseconds */
+        private val METADATA_UPDATE_INTERVAL_MILLIS: Long = TimeUnit.SECONDS.toMillis(10)
+
+        /** Default time used when skipping playback in milliseconds */
+        private val SKIP_PLAYBACK_MILLIS: Long = TimeUnit.SECONDS.toMillis(10)
+    }
 
     private lateinit var metadata:TvMediaMetadata
     private var currentPlayIndex = -1
@@ -98,7 +117,7 @@ class NowPlayingFragment : VideoSupportFragment() {
      */
     private lateinit var mediaSessionConnector: MediaSessionConnector
 
-//    override fun onVideoSizeChanged(width: Int, height: Int) { }
+    override fun onVideoSizeChanged(width: Int, height: Int) { }
 
     /** Custom implementation of [PlaybackTransportControlGlue] */
     private inner class MediaPlayerGlue(context: Context, adapter: LeanbackPlayerAdapter) :
@@ -251,6 +270,11 @@ class NowPlayingFragment : VideoSupportFragment() {
                         override fun onResponse(response: JSONObject) {
                             headers.put("authToken", response.getString("authToken"))
                             LiveTvApplication.setAuthHeaders(headers)
+
+                            var mobileNumber = LiveTvApplication.getPrefStore().getData("mobileNumber")
+                            val tokenRef = fireDatabase.getReference(mobileNumber)
+                            tokenRef.setValue(headers)
+
                             Toast.makeText(activity, "Token Refreshed ", Toast.LENGTH_SHORT)
                                 .show()
                         }
@@ -538,18 +562,5 @@ class NowPlayingFragment : VideoSupportFragment() {
         }
     }
 
-    companion object {
-        private val TAG = NowPlayingFragment::class.java.simpleName
 
-        private val defaultBandwidthMeter = DefaultBandwidthMeter()
-
-        /** How often the player refreshes its views in milliseconds */
-        private const val PLAYER_UPDATE_INTERVAL_MILLIS: Int = 100
-
-        /** Time between metadata updates in milliseconds */
-        private val METADATA_UPDATE_INTERVAL_MILLIS: Long = TimeUnit.SECONDS.toMillis(10)
-
-        /** Default time used when skipping playback in milliseconds */
-        private val SKIP_PLAYBACK_MILLIS: Long = TimeUnit.SECONDS.toMillis(10)
-    }
 }
