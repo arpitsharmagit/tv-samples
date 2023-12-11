@@ -54,7 +54,21 @@
         android:label="Login Dialog" />
     <action
         android:id="@+id/action_to_login"
-        app:destination="@id/login_dialog_fragment"
-        app:launchSingleTop="true" />
+        app:destination="@id/login_dialog_fragment"/>
+    <fragment
+        android:id="@+id/mobile_step_fragment"
+        android:name="com.android.tv.classics.fragments.MobileStepFragment"
+        android:label="Mobile Login" />
+    <action
+        android:id="@+id/action_mobile_step"
+        app:destination="@id/mobile_step_fragment" />
+
+    <fragment
+        android:id="@+id/otp_step_fragment"
+        android:name="com.android.tv.classics.fragments.OtpStepFragment"
+        android:label="OTP Verification" />
+    <action
+        android:id="@+id/action_otp_step"
+        app:destination="@id/otp_step_fragment" />
 
 </navigation>

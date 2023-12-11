@@ -21,33 +21,25 @@ import android.graphics.Color
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.os.ResultReceiver
-import android.support.v4.media.RatingCompat
 import android.support.v4.media.session.MediaSessionCompat
 import android.util.Log
 import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.Toast
 import androidx.leanback.app.PlaybackSupportFragment
 import androidx.leanback.app.VideoSupportFragment
 import androidx.leanback.app.VideoSupportFragmentGlueHost
-import androidx.leanback.media.PlaybackGlue
 import androidx.leanback.media.PlaybackTransportControlGlue
 import androidx.leanback.widget.*
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.Navigation
 import androidx.navigation.fragment.navArgs
-import coil.Coil
-import coil.api.get
 import com.android.tv.classics.LiveTvApplication
-import com.android.tv.classics.MainActivity
 import com.android.tv.classics.R
 import com.android.tv.classics.jio.Constants
 import com.android.tv.classics.jio.JioAPI
 import com.android.tv.classics.jio.store.HttpStore
-import com.android.tv.classics.jio.store.PrefStore
 import com.android.tv.classics.models.TvMediaDatabase
 import com.android.tv.classics.models.TvMediaMetadata
 import com.android.tv.classics.presenters.TvMediaMetadataPresenter
@@ -58,20 +50,22 @@ import com.google.android.exoplayer2.*
 import com.google.android.exoplayer2.ext.leanback.LeanbackPlayerAdapter
 import com.google.android.exoplayer2.ext.mediasession.MediaSessionConnector
 import com.google.android.exoplayer2.source.MediaSource
-import com.google.android.exoplayer2.source.ProgressiveMediaSource
 import com.google.android.exoplayer2.source.hls.HlsMediaSource
 import com.google.android.exoplayer2.upstream.*
+import com.google.android.exoplayer2.util.EventLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
+import kotlin.collections.HashMap
+import kotlin.collections.Map
+import kotlin.collections.forEach
+import kotlin.collections.get
+import kotlin.collections.hashMapOf
+import kotlin.collections.set
 import kotlin.math.max
 import kotlin.math.min
-import com.google.gson.Gson
-import java.net.CookieHandler
-import java.net.CookieManager
-import java.net.CookiePolicy
 
 
 /** A fragment representing the current metadata item being played */
@@ -167,12 +161,11 @@ class NowPlayingFragment : VideoSupportFragment() {
             lifecycleScope.launch(Dispatchers.IO) {
                 // set playback row art
 //                metadata.artUri?.let { art = Coil.get(it) }
-
+                TvLauncherUtils.refreshToken()
                 // uses Dispatchers.Main context
                 val authHeaders = LiveTvApplication.getAuthHeaders()
                 // blocking I/O operation
                 val response = JioAPI.GetPlaybackUrl(metadata.id,authHeaders)
-                Log.i(TAG,response.getString("result"))
                 metadata.contentUri = Uri.parse(response.getString("result"))
 
                 val hashMap = HashMap<String, String>()
@@ -183,8 +176,8 @@ class NowPlayingFragment : VideoSupportFragment() {
                     hashMap[Constants.DEVICE_ID] = authHeaders.getOrDefault("deviceId","")
                     hashMap[Constants.OS] = "android"
                     hashMap[Constants.USER_ID] = authHeaders.getOrDefault("userId","")
-                    hashMap[Constants.OS_VERSION] = "10"
-                    hashMap[Constants.VERSION_CODE] = "285"
+                    hashMap[Constants.OS_VERSION] = "12"
+                    hashMap[Constants.VERSION_CODE] = "330"
                     hashMap[Constants.CRM_ID] = authHeaders.getOrDefault("crmid","")
                     hashMap[Constants.SRNO] = metadata.id
                     hashMap[Constants.CHANNEL_ID] = metadata.id
@@ -197,10 +190,10 @@ class NowPlayingFragment : VideoSupportFragment() {
                 hashMap["Cookie"] = playbackCookie
 
                 withContext(Dispatchers.Main){
+                    increasePlayCount()
                     // Prepares metadata playback
                     val mediaSource = prepareMediaSource(metadata.contentUri, hashMap)
                     player.prepare(mediaSource, false, true)
-                    increasePlayCount()
                 }
             }
         }
@@ -251,16 +244,10 @@ class NowPlayingFragment : VideoSupportFragment() {
                         override fun onResponse(response: JSONObject) {
                             headers.put("authToken", response.getString("authToken"))
                             LiveTvApplication.setAuthHeaders(headers)
-                            Toast.makeText(activity, "Token Refreshed ", Toast.LENGTH_SHORT)
-                                .show()
                         }
 
                         override fun onError(error: ANError) {
-                            Toast.makeText(
-                                activity,
-                                "Unable to Refresh Token",
-                                Toast.LENGTH_SHORT
-                            ).show()
+                            LiveTvApplication.showToast("Unable to Refresh Token")
                         }
                     })
 
@@ -309,11 +296,12 @@ class NowPlayingFragment : VideoSupportFragment() {
         }
 
         // Adds this program to the continue watching row, in case the user leaves before finishing
-        addWatchNext()
+//        addWatchNext()
 
         // Initializes the video player
         player = ExoPlayerFactory.newSimpleInstance(requireContext())
         player.addListener(PlayerEventListener())
+        player.addAnalyticsListener(EventLogger(null))
         mediaSession = MediaSessionCompat(requireContext(), getString(R.string.app_name))
         mediaSessionConnector = MediaSessionConnector(mediaSession)
 
@@ -533,7 +521,9 @@ class NowPlayingFragment : VideoSupportFragment() {
 
     private inner class PlayerEventListener : Player.EventListener {
         override fun onPlayerError(error: ExoPlaybackException) {
-            removeWatchNext()
+
+            Log.e(TAG,"PlayError: ChannelNo: ${metadata.id} Url: ${metadata.contentUri}",error);
+//            removeWatchNext()
             decreasePlayCount()
         }
     }

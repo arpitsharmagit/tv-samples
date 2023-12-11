@@ -76,7 +76,7 @@ public class JioAPI {
             put(Constants.APP_NAME, "RJIL_JioTV");
             put(Constants.DEVICE_TYPE, "phone");
             put(Constants.OS, "android");
-            put(Constants.VERSION_CODE,"285");
+            put(Constants.VERSION_CODE,"330");
         }};;
 
         //Prepare request
@@ -102,23 +102,23 @@ public class JioAPI {
             put(Constants.ACCESS_TOKEN,authHeaders.getOrDefault("authToken",""));
             put(Constants.APP_KEY,authHeaders.getOrDefault("appkey",""));
             put(Constants.CAM_ID,"");
-            put(Constants.CHANNEL_ID,"144");
+            put(Constants.CHANNEL_ID,"162");
             put(Constants.CRM_ID,authHeaders.getOrDefault("crmid",""));
             put(Constants.DEVICE_ID, authHeaders.getOrDefault("deviceId",""));
             put(Constants.DEVICE_TYPE, "phone");
-            put("dm", "OnePlus ONEPLUS A5000");
+            put("dm", "OnePlus HD1911");
             put(Constants.OTT_USER,"false");
             put(Constants.LANG_ID,"");
             put(Constants.LANGUAGE_ID,"6");
             put(Constants.LBCOOKIES,"1");
             put(Constants.OS, "android");
-            put(Constants.OS_VERSION, "10");
+            put(Constants.OS_VERSION, "12");
             put(Constants.SESSIONID, authHeaders.getOrDefault("uniqueId",""));
             put(Constants.SUBSCRIBER_ID,authHeaders.getOrDefault("crmid",""));
             put(Constants.UNIQUE_ID,authHeaders.getOrDefault("uniqueId",""));
             put(Constants.USER_GROUP,authHeaders.getOrDefault("usergroup",""));
             put(Constants.USER_ID,authHeaders.getOrDefault("userId",""));
-            put(Constants.VERSION_CODE,"285");
+            put(Constants.VERSION_CODE,"330");
         }};
 
         ANRequest request = AndroidNetworking.get(playbackUrl)
@@ -145,19 +145,19 @@ public class JioAPI {
             put(Constants.CRM_ID,authHeaders.getOrDefault("crmid",""));
             put(Constants.DEVICE_ID, authHeaders.getOrDefault("deviceId",""));
             put(Constants.DEVICE_TYPE, "phone");
-            put("dm", "OnePlus ONEPLUS A5000");
+            put("dm", "OnePlus HD1911");
             put(Constants.OTT_USER,"false");
             put(Constants.LANG_ID,"");
             put(Constants.LANGUAGE_ID,"6");
             put(Constants.LBCOOKIES,"1");
             put(Constants.OS, "android");
-            put(Constants.OS_VERSION, "10");
+            put(Constants.OS_VERSION, "12");
             put(Constants.SESSIONID, authHeaders.getOrDefault("uniqueId",""));
             put(Constants.SUBSCRIBER_ID,authHeaders.getOrDefault("crmid",""));
             put(Constants.UNIQUE_ID,authHeaders.getOrDefault("uniqueId",""));
             put(Constants.USER_GROUP,authHeaders.getOrDefault("usergroup",""));
             put(Constants.USER_ID,authHeaders.getOrDefault("userId",""));
-            put(Constants.VERSION_CODE,"285");
+            put(Constants.VERSION_CODE,"330");
         }};
         //Prepare request
         Map<String,String> body = new HashMap<String,String>(){{

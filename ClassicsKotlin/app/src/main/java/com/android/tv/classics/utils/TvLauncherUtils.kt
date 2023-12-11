@@ -20,21 +20,27 @@ import android.annotation.SuppressLint
 import android.content.ContentResolver
 import android.content.Context
 import android.content.res.Resources
-import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.util.Log
 import android.util.Rational
-import android.util.Size
 import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.tvprovider.media.tv.PreviewChannel
 import androidx.tvprovider.media.tv.PreviewChannelHelper
 import androidx.tvprovider.media.tv.PreviewProgram
 import androidx.tvprovider.media.tv.TvContractCompat
-import com.android.tv.classics.models.TvMediaMetadata
 import androidx.tvprovider.media.tv.WatchNextProgram
+import com.android.tv.classics.LiveTvApplication
 import com.android.tv.classics.R
+import com.android.tv.classics.jio.Constants
+import com.android.tv.classics.jio.JioAPI
 import com.android.tv.classics.models.TvMediaCollection
+import com.android.tv.classics.models.TvMediaMetadata
+import com.androidnetworking.error.ANError
+import com.androidnetworking.interfaces.JSONObjectRequestListener
+import com.androidnetworking.interfaces.OkHttpResponseListener
+import okhttp3.Response
+import org.json.JSONObject
 
 /** Collection of static methods used to handle Android TV Home Screen Launcher operations */
 @RequiresApi(26)
@@ -226,7 +232,7 @@ class TvLauncherUtils private constructor() {
 
                 } catch (exc: Throwable) {
                     // Early exit: return null if we couldn't insert the channel
-                    Log.e(TAG, "Unable to publish channel", exc)
+//                    Log.e(TAG, "Unable to publish channel", exc)
                     return null
                 }
             }
@@ -391,13 +397,75 @@ class TvLauncherUtils private constructor() {
                 }
             }
         }
-        
-        fun showToast(context: Context, message: String) {
-            Toast.makeText(context,message, Toast.LENGTH_SHORT)
+
+         fun refreshToken(){
+            LiveTvApplication.getAuthHeaders()?.let {
+                JioAPI.RefreshToken(it)
+                    .getAsJSONObject(object : JSONObjectRequestListener {
+                        override fun onResponse(response: JSONObject) {
+                            it.put("authToken", response.getString("authToken"))
+                            LiveTvApplication.setAuthHeaders(it)
+                            Log.d(TAG,"Refreshed Token ["+ response.getString("authToken")+ "] and updated ["+ LiveTvApplication.getAuthHeaders().get("authToken") +"]")
+//                            LiveTvApplication.showToast("Token Refreshed")
+                        }
+
+                        override fun onError(error: ANError) {
+                            Log.e(TAG, "Unable to Refresh Token.", error.cause)
+                        }
+                    })
+            }
         }
 
-        fun showToastLong(context: Context, message: String) {
-            Toast.makeText(context,message, Toast.LENGTH_LONG)
+        fun sendOTP(mobileNumber: String){
+            val mobileNumberComplete = "+91$mobileNumber"
+            JioAPI.sendOTP(mobileNumberComplete)
+                .getAsOkHttpResponse(object : OkHttpResponseListener {
+                    override fun onResponse(response: Response) {
+                        if (response.code == 204) {
+                            LiveTvApplication.setMobileNumber(mobileNumber)
+                            LiveTvApplication.showToast("Successfully sent OTP to $mobileNumberComplete")
+                        }
+                    }
+                    override fun onError(anError: ANError) {
+                        LiveTvApplication.showToast("Error: $anError.errorBody")
+                    }
+                })
         }
+
+        fun verifyOTP(otp: String){
+            val mobileNumber = "+91${LiveTvApplication.getMobileNumber()}"
+            JioAPI.verifyOTP(mobileNumber, otp).getAsJSONObject(object:JSONObjectRequestListener{
+                override fun onResponse(response: JSONObject?) {
+                    response?.let {
+                        val headers: MutableMap<String, String> = mutableMapOf()
+                        val userDetails = it.getJSONObject("sessionAttributes").getJSONObject("user")
+
+                        headers[Constants.AUTH_TOKEN] = it.getString("authToken")
+                        headers[Constants.REFRESH_TOKEN] = it.getString("refreshToken")
+                        headers[Constants.SSO_TOKEN] = it.getString("ssoToken")
+                        headers[Constants.USER_ID] = userDetails.getString("uid")
+                        headers[Constants.UNIQUE_ID] = userDetails.getString("unique")
+                        headers[Constants.CRM_ID] = userDetails.getString("subscriberId")
+                        headers[Constants.APP_KEY] = "NzNiMDhlYzQyNjJm"
+                        headers[Constants.DEVICE_ID] = "94f739da0e91b3a6"
+                        headers[Constants.OS] = "Android"
+                        headers[Constants.VERSION_CODE] = "330"
+                        headers[Constants.DEVICE_TYPE] = "phone"
+                        headers[Constants.USER_GROUP] = "tvYR7NSNn7rymo3F"
+                        headers[Constants.LBCOOKIES] ="1"
+                        headers[Constants.USER_AGENT] = "JioTV"
+
+                        LiveTvApplication.getCloudDatabase().setValue(headers)
+                        LiveTvApplication.setAuthHeaders(headers)
+                        LiveTvApplication.showToast("Successfully logged in with $mobileNumber")
+                    }
+                }
+
+                override fun onError(anError: ANError?) {
+                    LiveTvApplication.showToast("Verify OTP Error: ${anError?.message}")
+                }
+            })
+        }
+
     }
 }

@@ -3,6 +3,7 @@ package com.android.tv.classics.jio.store;
 import android.content.Context;
 
 import com.android.tv.classics.LiveTvApplication;
+import com.androidnetworking.interceptors.HttpLoggingInterceptor;
 import com.google.android.exoplayer2.ext.cronet.CronetDataSourceFactory;
 import com.google.android.exoplayer2.ext.cronet.CronetEngineWrapper;
 import com.google.android.exoplayer2.upstream.DataSource;
@@ -38,9 +39,10 @@ public class HttpStore {
 
     public static OkHttpClient getHttpClient() {
         OkHttpClient.Builder builder = new OkHttpClient.Builder();
-//        HttpLoggingInterceptor httpLoggingInterceptor = new HttpLoggingInterceptor();
-//        httpLoggingInterceptor.setLevel(HttpLoggingInterceptor.Level.HEADERS);
-//        builder.addInterceptor(httpLoggingInterceptor);
+        HttpLoggingInterceptor httpLoggingInterceptor = new HttpLoggingInterceptor();
+        httpLoggingInterceptor.setLevel(HttpLoggingInterceptor.Level.BODY);
+        builder.addInterceptor(httpLoggingInterceptor);
+        builder.addNetworkInterceptor(httpLoggingInterceptor);
 
         ArrayList arrayList = new ArrayList();
         arrayList.add(Protocol.HTTP_2);

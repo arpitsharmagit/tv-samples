@@ -21,34 +21,20 @@ import android.net.Uri
 import android.os.Bundle
 import android.util.Log
 import android.view.WindowManager
-import android.widget.Toast
 import androidx.fragment.app.FragmentActivity
-import androidx.lifecycle.lifecycleScope
 import androidx.navigation.Navigation
-import androidx.work.Constraints
-import androidx.work.NetworkType
-import androidx.work.PeriodicWorkRequestBuilder
-import androidx.work.WorkManager
-import com.android.tv.classics.jio.JioAPI
 import com.android.tv.classics.models.TvMediaDatabase
-import com.android.tv.classics.workers.TvMediaSynchronizer
+import com.android.tv.classics.utils.TvLauncherUtils
 import com.androidnetworking.AndroidNetworking
-import com.androidnetworking.error.ANError
 import com.androidnetworking.interceptors.HttpLoggingInterceptor
-import com.androidnetworking.interfaces.JSONArrayRequestListener
-import com.androidnetworking.interfaces.JSONObjectRequestListener
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.json.JSONArray
-import org.json.JSONObject
-import java.util.concurrent.TimeUnit
 
 
 /** Entry point for the Android TV application */
 class MainActivity : FragmentActivity() {
-
     companion object {
         private val TAG = MainActivity::class.java.simpleName
     }
@@ -58,41 +44,15 @@ class MainActivity : FragmentActivity() {
 
         AndroidNetworking.initialize(applicationContext)
         AndroidNetworking.enableLogging() // simply enable logging
+
         AndroidNetworking.enableLogging(HttpLoggingInterceptor.Level.BODY) // enabling logging with level
+
 
         setContentView(R.layout.activity_main)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         val activity = this
         val db = TvMediaDatabase.getInstance(this)
-
-        val isLoggedIn = LiveTvApplication.getPrefStore().getBoolean("isLoggedIn")
-        if(isLoggedIn){
-            // Refersh Token
-                LiveTvApplication.getAuthHeaders()?.let { headers ->
-                    JioAPI.RefreshToken(headers)
-                        .getAsJSONObject(object : JSONObjectRequestListener {
-                            override fun onResponse(response: JSONObject) {
-                                headers.put("authToken", response.getString("authToken"))
-                                LiveTvApplication.setAuthHeaders(headers)
-                                Toast.makeText(activity, "Token Refreshed ", Toast.LENGTH_SHORT)
-                                    .show()
-                            }
-
-                            override fun onError(error: ANError) {
-                                Toast.makeText(
-                                    activity,
-                                    "Unable to Refresh Token",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                            }
-                        })
-            }
-        }
-        else{
-            Navigation.findNavController(activity, R.id.fragment_container)
-                .navigate(NavGraphDirections.actionToLogin())
-        }
 
         // Navigates to other fragments based on Intent's action
         // [MainActivity] is the main entry point for all intent filters
@@ -126,16 +86,24 @@ class MainActivity : FragmentActivity() {
                 else -> Log.w(TAG, "VIEW intent received but unrecognized URI: $uri")
             }
         }
+        if(LiveTvApplication.getMobileNumber() !=null && LiveTvApplication.getAuthHeaders() != null){
+            Log.d(TAG, "Mobile No. "+ LiveTvApplication.getMobileNumber()+ " AuthHeaders Found.")
+            TvLauncherUtils.refreshToken()
+            Navigation.findNavController(activity, R.id.fragment_container)
+                .navigate(NavGraphDirections.actionToMediaBrowser())
 
-        // Syncs the home screen channels hourly
-        // NOTE: It's very important to keep our content fresh in the user's home screen
-        WorkManager.getInstance(baseContext).enqueue(
-                PeriodicWorkRequestBuilder<TvMediaSynchronizer>(1, TimeUnit.DAYS)
-                        .setInitialDelay(1, TimeUnit.DAYS)
-                        .setConstraints(Constraints.Builder()
-                                .setRequiredNetworkType(NetworkType.CONNECTED)
-                                .build())
-                        .build())
+        }else{
+            Navigation.findNavController(activity, R.id.fragment_container)
+                .navigate(NavGraphDirections.actionMobileStep())
+        }
+
+        // NOTE: It's very important to keep our api token fresh
+//        WorkManager.getInstance(baseContext).enqueue(
+//                PeriodicWorkRequestBuilder<TvTokenRefresher>(60, TimeUnit.MINUTES)
+//                        .setInitialDelay(30, TimeUnit.MINUTES)
+//                        .setConstraints(Constraints.Builder()
+//                                .setRequiredNetworkType(NetworkType.CONNECTED)
+//                                .build())
+//                        .build())
     }
-
 }

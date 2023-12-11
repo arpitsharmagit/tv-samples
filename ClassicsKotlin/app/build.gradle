@@ -19,6 +19,8 @@ apply plugin: 'kotlin-android'
 apply plugin: 'kotlin-android-extensions'
 apply plugin: 'kotlin-kapt'
 apply plugin: 'androidx.navigation.safeargs'
+apply plugin: 'com.google.gms.google-services'
+apply plugin: 'com.google.firebase.crashlytics'
 
 android {
     compileSdkVersion 29
@@ -74,7 +76,10 @@ android {
 
 dependencies {
     implementation 'org.chromium.net:cronet-api:76.3809.111'
-
+    implementation(platform("com.google.firebase:firebase-bom:18.0.0"))
+    implementation 'com.google.firebase:firebase-database'
+    implementation 'com.google.firebase:firebase-crashlytics:18.3.2'
+    implementation 'com.google.firebase:firebase-analytics:21.2.0'
 
     // Kotlin lang
     def coroutines_version = "1.1.0"

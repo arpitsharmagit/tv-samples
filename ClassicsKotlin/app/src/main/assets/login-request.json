@@ -2,13 +2,13 @@
   "number": "" ,
   "otp": "",
   "deviceInfo": {
-    "consumptionDeviceName": "ONEPLUS A5000",
+    "consumptionDeviceName": "OnePlus HD1911",
     "info": {
       "type": "android",
       "platform": {
-        "name": "OnePlus5"
+        "name": "HD1911"
       },
-      "androidId": "1e075302d2fb0b64"
+      "androidId": "94f739da0e91b3a6"
     }
   }
 }

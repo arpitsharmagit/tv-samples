@@ -3,66 +3,79 @@
     "id": 5,
     "title": "Entertainment",
     "description": "Entertainment Channels",
-    "image": "https://jioimages.cdn.jio.com/imagespublic/38/52/Entertainment_1584620980069_tv.jpg"
+    "image": "https://jioimages.cdn.jio.com/imagespublic/38/52/Entertainment_1584620980069_tv.jpg",
+    "order": 1
   },{
     "id": 6,
     "title": "Movies",
     "description": "Movies Channels",
-    "image": "https://jioimages.cdn.jio.com/imagespublic/logos/langGen/movies_1579517470920.jpg"
+    "image": "https://jioimages.cdn.jio.com/imagespublic/logos/langGen/movies_1579517470920.jpg",
+    "order": 3
   },{
     "id": 7,
     "title": "Kids",
     "description": "Kids Channels",
-    "image": "https://jioimages.cdn.jio.com/imagespublic/logos/langGen/kids_1579517470920.jpg"
+    "image": "https://jioimages.cdn.jio.com/imagespublic/logos/langGen/kids_1579517470920.jpg",
+    "order": 4
   },{
     "id": 8,
     "title": "Sports",
     "description": "Sports Channels",
-    "image": "https://jioimages.cdn.jio.com/imagespublic/logos/langGen/Sports_1579245819981.jpg"
+    "image": "https://jioimages.cdn.jio.com/imagespublic/logos/langGen/Sports_1579245819981.jpg",
+    "order": 8
   },{
     "id": 9,
     "title": "Lifestyle",
     "description": "Lifestyle Channels",
-    "image": "https://jioimages.cdn.jio.com/imagespublic/logos/langGen/lifestyle_1579517470920.jpg"
+    "image": "https://jioimages.cdn.jio.com/imagespublic/logos/langGen/lifestyle_1579517470920.jpg",
+    "order": 5
   },{
     "id": 10,
     "title": "Infotainment",
     "description": "Infotainment Channels",
-    "image": "https://jioimages.cdn.jio.com/imagespublic/logos/langGen/infotainment_1579517470920.jpg"
+    "image": "https://jioimages.cdn.jio.com/imagespublic/logos/langGen/infotainment_1579517470920.jpg",
+    "order": 6
   },{
     "id": 12,
     "title": "News",
     "description": "News Channels",
-    "image": "https://jioimages.cdn.jio.com/imagespublic/logos/langGen/news_1579517470920.jpg"
+    "image": "https://jioimages.cdn.jio.com/imagespublic/logos/langGen/news_1579517470920.jpg",
+    "order": 2
   },{
     "id": 13,
     "title": "Music",
     "description": "Music Channels",
-    "image": "https://jioimages.cdn.jio.com/imagespublic/logos/langGen/Music_1579245819981.jpg"
+    "image": "https://jioimages.cdn.jio.com/imagespublic/logos/langGen/Music_1579245819981.jpg",
+    "order": 7
   },{
     "id": 15,
     "title": "Devotional",
     "description": "Devotional Channels",
-    "image": "https://jioimages.cdn.jio.com/imagespublic/logos/langGen/devotional_1579517470920.jpg"
+    "image": "https://jioimages.cdn.jio.com/imagespublic/logos/langGen/devotional_1579517470920.jpg",
+    "order": 9
   },{
     "id": 16,
     "title": "Business",
     "description": "Business Channels",
-    "image": "https://jioimages.cdn.jio.com/imagespublic/logos/langGen/business_1579517470920.jpg"
+    "image": "https://jioimages.cdn.jio.com/imagespublic/logos/langGen/business_1579517470920.jpg",
+    "order": 10
   },{
     "id": 17,
     "title": "Educational",
     "description": "Educational Channels",
-    "image": "https://jioimages.cdn.jio.com/imagespublic/logos/langGen/educational_1579517470920.jpg"
+    "image": "https://jioimages.cdn.jio.com/imagespublic/logos/langGen/educational_1579517470920.jpg",
+    "order": 11
   },{
     "id": 18,
     "title": "Shopping",
     "description": "Shopping Channels",
-    "image": "https://jioimages.cdn.jio.com/imagespublic/logos/langGen/shopping_1579517470920.jpg"
+    "image": "https://jioimages.cdn.jio.com/imagespublic/logos/langGen/shopping_1579517470920.jpg",
+    "order": 12
   },{
     "id": 19,
     "title": "JioDarshan",
     "description": "JioDarshan Channels",
-    "image": "https://jioimages.cdn.jio.com/imagespublic/logos/langGen/jiodarshan_1579517470920.jpg"
+    "image": "https://jioimages.cdn.jio.com/imagespublic/logos/langGen/jiodarshan_1579517470920.jpg",
+    "order": 13
   }]
 }

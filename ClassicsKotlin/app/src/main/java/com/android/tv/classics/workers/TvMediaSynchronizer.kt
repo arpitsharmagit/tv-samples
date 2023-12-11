@@ -19,26 +19,16 @@ package com.android.tv.classics.workers
 import android.content.Context
 import android.net.Uri
 import android.util.Log
-import android.widget.Toast
-import androidx.navigation.Navigation
 import androidx.work.Worker
 import androidx.work.WorkerParameters
-import com.android.tv.classics.R
-import com.android.tv.classics.fragments.NowPlayingFragment
 import com.android.tv.classics.jio.Constants
 import com.android.tv.classics.jio.JioAPI
-import com.android.tv.classics.jio.models.ChannelsResponse
 import com.android.tv.classics.models.*
 import com.android.tv.classics.utils.TvLauncherUtils
 import com.androidnetworking.AndroidNetworking
 import com.androidnetworking.interceptors.HttpLoggingInterceptor
-import com.androidnetworking.interfaces.JSONObjectRequestListener
-import okhttp3.*
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.IOException
 import java.nio.charset.StandardCharsets
 
 /** Maps a JSONArray of strings */
@@ -98,7 +88,8 @@ class TvMediaSynchronizer(private val context: Context, params: WorkerParameters
                     id = obj.getString("id"),
                     title = obj.getString("title"),
                     description = obj.getString("description"),
-                    artUri = obj.getString("image")?.let { Uri.parse(it) })
+                    artUri = obj.getString("image")?.let { Uri.parse(it) },
+                    orderBy = obj.getInt("order"))
                 collection
             }
 
@@ -130,6 +121,7 @@ class TvMediaSynchronizer(private val context: Context, params: WorkerParameters
             // Gets a list of the metadata IDs for comparisons
             val metadataIdList = feed.metadata.map { it.id }
 
+
             // Deletes items in our database that have been deleted from the metadata feed
             // NOTE: It's important to keep the things added to the TV launcher in sync
             database.metadata().findAll()
@@ -149,28 +141,40 @@ class TvMediaSynchronizer(private val context: Context, params: WorkerParameters
                         TvLauncherUtils.removeChannel(context, it)
                     }
 
+            var dbChannels = database.metadata().findAll().map { it.id }
+            feed.metadata.filter { !dbChannels.contains(it.id) }
+                .forEach {
+                    database.metadata().insert(it)
+                }
+
+            var dbCollections = database.collections().findAll().map { it.id }
+            feed.collections.filter { !dbCollections.contains(it.id) }
+                .forEach {
+                    database.collections().insert(it)
+                }
+
             // Upon insert, we will replace all metadata already added so we can update titles,
             // images, descriptions, etc. Note that we overloaded the `equals` function in our data
             // class to avoid replacing metadata which has an updated state such as playback
             // position.
-            database.metadata().insert(*feed.metadata.toTypedArray())
-            database.collections().insert(*feed.collections.toTypedArray())
+//            database.metadata().insert(*feed.metadata.toTypedArray())
+//            database.collections().insert(*feed.collections.toTypedArray())
 
             // Inserts the first collection as the "default" channel
-            val defaultChannelTitle = context.getString(R.string.app_name)
-            val defaultChannelArtUri = TvLauncherUtils.resourceUri(
-                    context.resources, R.drawable.ic_jasmine_logo)
-            val defaultChannelCollection = feed.collections.first().copy(
-                    title = defaultChannelTitle, artUri = defaultChannelArtUri)
-            val defaultChannelUri = TvLauncherUtils.upsertChannel(
-                    context, defaultChannelCollection,
-                    database.metadata().findByCollection(defaultChannelCollection.id))
-
-//             Inserts the rest of the collections as channels that user can add to home screen
-            feed.collections.forEach {
-                TvLauncherUtils.upsertChannel(
-                        context, it, database.metadata().findByCollection(it.id))
-            }
+//            val defaultChannelTitle = context.getString(R.string.app_name)
+//            val defaultChannelArtUri = TvLauncherUtils.resourceUri(
+//                    context.resources, R.drawable.ic_jasmine_logo)
+//            val defaultChannelCollection = feed.collections.first().copy(
+//                    title = defaultChannelTitle, artUri = defaultChannelArtUri)
+//            val defaultChannelUri = TvLauncherUtils.upsertChannel(
+//                    context, defaultChannelCollection,
+//                    database.metadata().findByCollection(defaultChannelCollection.id))
+//
+////             Inserts the rest of the collections as channels that user can add to home screen
+//            feed.collections.forEach {
+//                TvLauncherUtils.upsertChannel(
+//                        context, it, database.metadata().findByCollection(it.id))
+//            }
         }
 
 

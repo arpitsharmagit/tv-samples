@@ -33,25 +33,27 @@ import kotlinx.android.parcel.Parcelize
 @Parcelize
 data class TvMediaCollection(
 
-        /** User-provided identifier for this collection */
+    /** User-provided identifier for this collection */
         @PrimaryKey val id: String,
 
-        /** Title displayed to user */
+    /** Title displayed to user */
         val title: String,
 
-        /** Description of this collection */
+    /** Description of this collection */
         val description: String,
 
-        /** URI for the album / poster art corresponding to this collection */
-        val artUri: Uri? = null
+    /** URI for the album / poster art corresponding to this collection */
+        val artUri: Uri? = null,
 
-) : Parcelable
+        val orderBy: Int
+
+    ) : Parcelable
 
 /** Data access object for the [TvMediaCollection] class */
 @Dao
 interface TvMediaCollectionDAO {
 
-    @Query("SELECT * FROM tvmediacollection")
+    @Query("SELECT * FROM tvmediacollection where id in (5,6,7,8,9,10,12,13,15,16) ORDER BY orderBy ASC")
     fun findAll(): List<TvMediaCollection>
 
     @Query("SELECT * FROM tvmediacollection WHERE id LIKE :id LIMIT 1")

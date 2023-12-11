@@ -163,11 +163,12 @@ class MediaBrowserFragment : BrowseSupportFragment() {
 
         // Pick a random background for our fragment
         backgroundDrawable = lifecycleScope.async(Dispatchers.IO) {
-            val backgroundList = listOf("tealbg","smoothredbg","skybluebg","seagreanbg",
-                "orangebg","jetblackbg","diffbluebg","bg5","bg4","bg3")
-            val drawableId = resources.getIdentifier(backgroundList.shuffled().first(), "drawable", requireContext().packageName)
-            val uri = context?.let { TvLauncherUtils.resourceUri(it.resources, drawableId) }
-            Coil.getAny(uri ?: R.drawable.bg3)
+//            val backgroundList = listOf("tealbg","smoothredbg","skybluebg","seagreanbg",
+//                "orangebg","jetblackbg","diffbluebg","bg5","bg4","bg3")
+//            val drawableId = resources.getIdentifier(backgroundList.shuffled().first(), "drawable", requireContext().packageName)
+//            val uri = context?.let { TvLauncherUtils.resourceUri(it.resources, drawableId) }
+//            Coil.getAny(uri ?: R.drawable.bg5)
+            Coil.getAny(R.drawable.bg5)
         }
     }
 

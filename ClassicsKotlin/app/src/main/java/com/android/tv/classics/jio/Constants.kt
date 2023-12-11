@@ -31,13 +31,14 @@ class Constants {
         const val UNIQUE_ID = "uniqueId"
         const val USER_GROUP = "usergroup"
         const val USER_TYPE = "usertype"
+        const val USER_AGENT = "User-Agent"
         const val VERSION_CODE = "versionCode"
 
         const val otpURL = "https://jiotvapi.media.jio.com/userservice/apis/v1/loginotp/send"
         const val verifyURL = "https://jiotvapi.media.jio.com/userservice/apis/v1/loginotp/verify"
         const val refreshTokenURL = "https://auth.media.jio.com/tokenservice/apis/v1/refreshtoken?langId=6"
         const val channelURL = "https://jiotvapi.media.jio.com/playback/apis/v1/geturl?langId=6"
-        const val channelsURL = "https://jiotv.data.cdn.jio.com/apis/v3.0/getMobileChannelList/get/?langId=6&os=android&devicetype=phone&usertype=tvYR7NSNn7rymo3F&version=285&langId=6"
+        const val channelsURL = "https://jiotvapi.cdn.jio.com/apis/v3.0/getMobileChannelList/get/?langId=6&os=android&devicetype=phone&usertype=JIO&version=330&langId=6"
         const val imageUrl = "https://jiotv.catchup.cdn.jio.com/dare_images/images/"
     }
 

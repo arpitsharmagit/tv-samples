@@ -35,7 +35,7 @@ public class PrefStore {
         } catch (Exception e) {
             e.printStackTrace();
         }
-        return outputMap;
+        return outputMap.size() == 0? null : outputMap;
     }
 
     public void saveData(String key, String value){
@@ -45,7 +45,7 @@ public class PrefStore {
     }
 
     public String getData(String key){
-        return sharedPref.getString(key, "");
+        return sharedPref.getString(key, null);
     }
 
     public void saveBoolean(String key, boolean value){
