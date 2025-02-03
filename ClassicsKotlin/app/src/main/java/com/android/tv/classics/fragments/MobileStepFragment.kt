@@ -27,7 +27,7 @@ class MobileStepFragment: GuidedStepSupportFragment() {
     }
 
     override fun onCreateActions(actions: MutableList<GuidedAction>, savedInstanceState: Bundle?) {
-        val mobileEditor =  GuidedAction.Builder(activity).infoOnly(true).title("Mobile Number").description("9310949577").build();
+        val mobileEditor =  GuidedAction.Builder(activity).infoOnly(true).title("Mobile Number").description("9997903005").build();
         val nextAction =  GuidedAction.Builder(activity).id(NEXT).title("Login").build();
         actions.add(mobileEditor)
         actions.add(nextAction)
@@ -43,7 +43,7 @@ class MobileStepFragment: GuidedStepSupportFragment() {
             Log.i(TAG,"Entered Mobile Number $mobileNumber")
             LiveTvApplication.setMobileNumber(mobileNumber)
 
-            if(LiveTvApplication.getAuthHeaders() != null){
+            if(LiveTvApplication.getAuthHeaders().isNotEmpty()){
                 TvLauncherUtils.refreshToken()
                 Navigation.findNavController(requireActivity(), R.id.fragment_container)
                     .navigate(NavGraphDirections.actionToMediaBrowser());

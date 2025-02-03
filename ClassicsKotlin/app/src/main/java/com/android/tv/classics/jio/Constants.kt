@@ -40,6 +40,7 @@ class Constants {
         const val channelURL = "https://jiotvapi.media.jio.com/playback/apis/v1/geturl?langId=6"
         const val channelsURL = "https://jiotvapi.cdn.jio.com/apis/v3.0/getMobileChannelList/get/?langId=6&os=android&devicetype=phone&usertype=JIO&version=330&langId=6"
         const val imageUrl = "https://jiotv.catchup.cdn.jio.com/dare_images/images/"
+        const val epgUrl = "https://jiotvapi.cdn.jio.com/apis/v1.3/getepg/get?offset=0&channel_id=channelId&langId=6";
     }
 
     fun getAllHeaders(){

@@ -30,6 +30,7 @@ import android.view.ViewGroup
 import androidx.leanback.app.PlaybackSupportFragment
 import androidx.leanback.app.VideoSupportFragment
 import androidx.leanback.app.VideoSupportFragmentGlueHost
+import androidx.leanback.media.PlaybackGlue
 import androidx.leanback.media.PlaybackTransportControlGlue
 import androidx.leanback.widget.*
 import androidx.lifecycle.lifecycleScope
@@ -41,9 +42,11 @@ import com.android.tv.classics.jio.Constants
 import com.android.tv.classics.jio.JioAPI
 import com.android.tv.classics.jio.store.HttpStore
 import com.android.tv.classics.models.TvMediaDatabase
+import com.android.tv.classics.models.TvMediaEPG
 import com.android.tv.classics.models.TvMediaMetadata
 import com.android.tv.classics.presenters.TvMediaMetadataPresenter
 import com.android.tv.classics.utils.TvLauncherUtils
+import com.android.tv.classics.workers.mapObject
 import com.androidnetworking.error.ANError
 import com.androidnetworking.interfaces.JSONObjectRequestListener
 import com.google.android.exoplayer2.*
@@ -57,12 +60,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import java.text.SimpleDateFormat
+import java.time.Instant
+import java.util.Calendar
+import java.util.Locale
+import java.util.TimeZone
 import java.util.concurrent.TimeUnit
-import kotlin.collections.HashMap
-import kotlin.collections.Map
-import kotlin.collections.forEach
-import kotlin.collections.get
-import kotlin.collections.hashMapOf
 import kotlin.collections.set
 import kotlin.math.max
 import kotlin.math.min
@@ -72,6 +75,7 @@ import kotlin.math.min
 class NowPlayingFragment : VideoSupportFragment() {
 
     private lateinit var metadata:TvMediaMetadata
+    private lateinit var shows: List<TvMediaEPG>
     private var currentPlayIndex = -1
     private lateinit var channelsMetadataList: HashMap<String,TvMediaMetadata>
 
@@ -115,30 +119,32 @@ class NowPlayingFragment : VideoSupportFragment() {
                 player.seekTo(max(0, player.currentPosition - millis))
 
         fun nextChannel() {
-            val nextChannelMetadata = channelsMetadataList[++currentPlayIndex]
+            val index: String = (++currentPlayIndex).toString()
+            val nextChannelMetadata = channelsMetadataList[index]
             if(nextChannelMetadata != null){
                 setMetadata(nextChannelMetadata)
             }
         }
         fun previousChannel() {
-            val prevChannelMetadata = channelsMetadataList[--currentPlayIndex]
+            val index: String = (--currentPlayIndex).toString()
+            val prevChannelMetadata = channelsMetadataList[index]
             if (prevChannelMetadata != null) {
                 setMetadata(prevChannelMetadata)
             }
         }
 
-        override fun onUpdateProgress() {}
+//        override fun onUpdateProgress() {}
 
-        override fun onCreateRowPresenter(): PlaybackRowPresenter {
-            return super.onCreateRowPresenter().apply {
-                val rp = (this as? PlaybackTransportRowPresenter)
-                rp?.progressColor = Color.TRANSPARENT
-                rp?.secondaryProgressColor = Color.TRANSPARENT
-            }
-        }
+//        override fun onCreateRowPresenter(): PlaybackRowPresenter {
+//            return super.onCreateRowPresenter().apply {
+//                val rp = (this as? PlaybackTransportRowPresenter)
+//                rp?.progressColor = Color.TRANSPARENT
+//                rp?.secondaryProgressColor = Color.TRANSPARENT
+//            }
+//        }
 
         override fun onCreatePrimaryActions(adapter: ArrayObjectAdapter) {
-//            super.onCreatePrimaryActions(adapter)
+            super.onCreatePrimaryActions(adapter)
             // Append rewind and fast forward actions to our player, keeping the play/pause actions
             // created by default by the glue
 //            adapter.add(actionRewind)
@@ -153,73 +159,139 @@ class NowPlayingFragment : VideoSupportFragment() {
         }
 
         /** Custom function used to update the metadata displayed for currently playing media */
-        fun setMetadata(metadata: TvMediaMetadata) {
+        fun setMetadata(newmetadata: TvMediaMetadata) {
+            metadata = newmetadata
             // Displays basic metadata in the player
-//            title = metadata.title
-//            subtitle = metadata.title
-
             lifecycleScope.launch(Dispatchers.IO) {
                 // set playback row art
 //                metadata.artUri?.let { art = Coil.get(it) }
                 TvLauncherUtils.refreshToken()
-                // uses Dispatchers.Main context
-                val authHeaders = LiveTvApplication.getAuthHeaders()
-                // blocking I/O operation
-                val response = JioAPI.GetPlaybackUrl(metadata.id,authHeaders)
-                metadata.contentUri = Uri.parse(response.getString("result"))
-
-                val hashMap = HashMap<String, String>()
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                    hashMap[Constants.UNIQUE_ID] = authHeaders.getOrDefault("uniqueId","")
-                    hashMap[Constants.SSO_TOKEN] = authHeaders.getOrDefault("ssotoken","")
-                    hashMap[Constants.SUBSCRIBER_ID] = authHeaders.getOrDefault("crmid","")
-                    hashMap[Constants.DEVICE_ID] = authHeaders.getOrDefault("deviceId","")
-                    hashMap[Constants.OS] = "android"
-                    hashMap[Constants.USER_ID] = authHeaders.getOrDefault("userId","")
-                    hashMap[Constants.OS_VERSION] = "12"
-                    hashMap[Constants.VERSION_CODE] = "330"
-                    hashMap[Constants.CRM_ID] = authHeaders.getOrDefault("crmid","")
-                    hashMap[Constants.SRNO] = metadata.id
-                    hashMap[Constants.CHANNEL_ID] = metadata.id
-                    hashMap[Constants.DEVICE_TYPE] = "phone"
-                    hashMap[Constants.USER_GROUP] = authHeaders.getOrDefault("usergroup","")
-                    hashMap[Constants.ACCESS_TOKEN] = authHeaders.getOrDefault("authToken","")
+//                shows = emptyList()
+                shows = JioAPI.GetEPG(metadata.id).getJSONArray("epg").mapObject { obj ->
+                    // Traverses the collection and map each content item metadata
+                    TvMediaEPG(
+                        srno = obj.getLong("srno"),
+                        showtime = obj.getString("showtime"),
+                        showname = obj.getString("showname"),
+                        description = obj.getString("description"),
+                        duration = obj.getInt("duration"),
+                        endtime = obj.getString("endtime"),
+                        startEpoch = obj.getLong("startEpoch"),
+                        endEpoch = obj.getLong("endEpoch"),
+                        isPastEpisode = obj.getBoolean("isPastEpisode"),
+                        isCatchupAvailable = obj.getBoolean("isCatchupAvailable"),
+                    )
                 }
-
-                val playbackCookie = JioAPI.GetHeaderCookie(response.getString("result"),authHeaders);
-                hashMap["Cookie"] = playbackCookie
-
-                withContext(Dispatchers.Main){
-                    increasePlayCount()
-                    // Prepares metadata playback
-                    val mediaSource = prepareMediaSource(metadata.contentUri, hashMap)
-                    player.prepare(mediaSource, false, true)
-                }
+                var currentShow = findCurrentShow()
+                startPlayingCurrentShow(currentShow)
             }
         }
     }
 
-    private fun prepareMediaSource(playbackUri: Uri, playbackHeaders: Map<String, String>): MediaSource {
-        var buildCronetDataSourceFactory: HttpDataSource.Factory? =
+    private suspend fun startPlayingCurrentShow(show: TvMediaEPG?){
+        try {
+            val authHeaders = LiveTvApplication.getAuthHeaders()
+
+            val simpleDateFormat = SimpleDateFormat("yyyyMMdd'T'HHmmss", Locale.US)
+            simpleDateFormat.timeZone = TimeZone.getTimeZone("GMT")
+            val beginTime = simpleDateFormat.format(show?.startEpoch)
+            val endTime = simpleDateFormat.format(show?.endEpoch)
+            val programId = show?.srno.toString()
+            val srNo = programId.take(6)
+            val body: java.util.HashMap<String?, String?> =
+                object : java.util.HashMap<String?, String?>() {
+                    init {
+                        put("channel_id", metadata.id)
+                        put("stream_type", "Seek")
+                        put("srno", srNo)
+                        put("programId", programId)
+                        put("begin", beginTime)
+                        put("end", endTime)
+                    }
+                }
+            // blocking I/O operation
+            val response = JioAPI.GetPlaybackUrl(body, authHeaders)
+            metadata.contentUri = Uri.parse(response.getString("result"))
+
+            val hashMap = HashMap<String, String>()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                hashMap[Constants.UNIQUE_ID] = authHeaders.getOrDefault("uniqueId", "")
+                hashMap[Constants.SSO_TOKEN] = authHeaders.getOrDefault("ssotoken", "")
+                hashMap[Constants.SUBSCRIBER_ID] = authHeaders.getOrDefault("crmid", "")
+                hashMap[Constants.DEVICE_ID] = authHeaders.getOrDefault("deviceId", "")
+                hashMap[Constants.OS] = "android"
+                hashMap[Constants.USER_ID] = authHeaders.getOrDefault("userId", "")
+                hashMap[Constants.OS_VERSION] = "12"
+                hashMap[Constants.VERSION_CODE] = "370"
+                hashMap[Constants.CRM_ID] = authHeaders.getOrDefault("crmid", "")
+                hashMap[Constants.SRNO] = metadata.id
+                hashMap[Constants.CHANNEL_ID] = metadata.id
+                hashMap[Constants.DEVICE_TYPE] = "phone"
+                hashMap[Constants.USER_GROUP] = authHeaders.getOrDefault("usergroup", "")
+                hashMap[Constants.ACCESS_TOKEN] = authHeaders.getOrDefault("authToken", "")
+            }
+
+            val playbackCookie = JioAPI.GetHeaderCookie(response.getString("result"), authHeaders);
+            hashMap["Cookie"] = playbackCookie
+
+            withContext(Dispatchers.Main) {
+                increasePlayCount()
+                // Prepares metadata playback
+                val mediaSource = prepareMediaSource(metadata.contentUri, hashMap)
+                player.prepare(mediaSource, false, true)
+
+                val subTitleFormat = SimpleDateFormat("EEE dd MMM HH:mm a", Locale.US)
+                subTitleFormat.timeZone = TimeZone.getDefault()
+
+                playerGlue.title = show?.showname
+                playerGlue.subtitle =
+                    subTitleFormat.format(show?.startEpoch) + " | " + show?.duration.toString() + " mins"
+            }
+        }
+        catch(e: Exception){
+            Log.e(TAG,"error occurred while playing",e);
+        }
+    }
+
+    private fun findCurrentShow(): TvMediaEPG? {
+        var currentShow = shows.filter {
+            Instant.now().isAfter(it.startEpoch?.let { it1 -> Instant.ofEpochMilli(it1) })  &&
+                    Instant.now().isBefore(it.endEpoch?.let { it1 -> Instant.ofEpochMilli(it1) })
+        }.firstOrNull()
+        return currentShow
+    }
+
+    private fun findNextShow(): TvMediaEPG? {
+        var currentShow = shows.filter {
+            Instant.now().isAfter(it.endEpoch?.let { it1 -> Instant.ofEpochMilli(it1) })
+        }.firstOrNull()
+        return currentShow
+    }
+
+    private fun prepareMediaSource(playbackUri: Uri, playbackHeaders: Map<String, String>): HlsMediaSource {
+        // Use DefaultHttpDataSource.Factory as the base
+        val defaultHttpDataSourceFactory = DefaultHttpDataSource.Factory().apply {
+            defaultRequestProperties.set(playbackHeaders)
+        }
+
+        // Attempt to build Cronet factory (if available)
+        val buildCronetDataSourceFactory: HttpDataSource.Factory? =
             HttpStore.buildHttpDataSourceFactory(defaultBandwidthMeter)
-        val buildHttpDataSourceFactory = HttpStore.buildHttpDataSourceFactory(defaultBandwidthMeter)
 
-        if (buildCronetDataSourceFactory == null) {
-            buildHttpDataSourceFactory.defaultRequestProperties.set(playbackHeaders)
-        } else {
-            buildCronetDataSourceFactory.defaultRequestProperties.set(playbackHeaders)
-        }
-        if (buildCronetDataSourceFactory == null) {
-            buildCronetDataSourceFactory = buildHttpDataSourceFactory
-        }
+        // Choose the appropriate factory (Cronet or default)
+        val httpDataSourceFactory: HttpDataSource.Factory = buildCronetDataSourceFactory ?: defaultHttpDataSourceFactory
 
-        val dataSourceFactory: ResolvingDataSource.Factory = ResolvingDataSource.Factory(
-            buildCronetDataSourceFactory,  // Provide just-in-time request headers.
+        // Create the ResolvingDataSource.Factory
+        val resolvingDataSourceFactory = ResolvingDataSource.Factory(
+            httpDataSourceFactory,
             { dataSpec: DataSpec ->
                 dataSpec.withRequestHeaders(playbackHeaders)
-            })
+            }
+        )
 
-        return HlsMediaSource.Factory(dataSourceFactory as DataSource.Factory).createMediaSource(playbackUri)
+        // Create the HlsMediaSource
+        return HlsMediaSource.Factory(resolvingDataSourceFactory)
+            .createMediaSource(MediaItem.fromUri(playbackUri))
     }
 
     /** Updates last know playback position */
@@ -252,11 +324,11 @@ class NowPlayingFragment : VideoSupportFragment() {
                     })
 
                 // Get New GetPlaybackUrl
-                lifecycleScope.launch(Dispatchers.IO) {
-                    val response =
-                        JioAPI.GetPlaybackUrl(metadata.id, LiveTvApplication.getAuthHeaders())
-                    metadata.apply { contentUri = Uri.parse(response.getString("result")) }
-                }
+//                lifecycleScope.launch(Dispatchers.IO) {
+//                    val response =
+//                        JioAPI.GetPlaybackUrl(metadata.id, LiveTvApplication.getAuthHeaders())
+//                    metadata.apply { contentUri = Uri.parse(response.getString("result")) }
+//                }
 
                 // Marks as complete if 95% or more of video is complete
 //                if (player.playbackState == SimpleExoPlayer.STATE_ENDED ||
@@ -301,7 +373,7 @@ class NowPlayingFragment : VideoSupportFragment() {
         // Initializes the video player
         player = ExoPlayerFactory.newSimpleInstance(requireContext())
         player.addListener(PlayerEventListener())
-        player.addAnalyticsListener(EventLogger(null))
+//        player.addAnalyticsListener(EventLogger(null))
         mediaSession = MediaSessionCompat(requireContext(), getString(R.string.app_name))
         mediaSessionConnector = MediaSessionConnector(mediaSession)
 
@@ -314,32 +386,47 @@ class NowPlayingFragment : VideoSupportFragment() {
             host = VideoSupportFragmentGlueHost(this@NowPlayingFragment)
 
             // Adds playback state listeners
-//            addPlayerCallback(object : PlaybackGlue.PlayerCallback() {
-//
-//                override fun onPreparedStateChanged(glue: PlaybackGlue?) {
-//                    super.onPreparedStateChanged(glue)
-//                    if (glue?.isPrepared == true) {
-//                        // When playback is ready, skip to last known position
+            addPlayerCallback(object : PlaybackGlue.PlayerCallback() {
+
+                override fun onPlayStateChanged(glue: PlaybackGlue?) {
+                    super.onPlayStateChanged(glue)
+
+                    if (glue?.isPlaying == true && player.contentDuration > 0) {
+                        // When playback is ready, skip to last known position
+                        var currentShow = findCurrentShow()
+//                        Log.d(TAG,"DURATION ======" + player.duration.toString() +" "+ player.contentDuration+" "+player.contentPosition)
+//                        Log.d(TAG,"Range ===="+ player.contentPosition +" "+(player.contentDuration - (currentShow?.endEpoch!! - Calendar.getInstance().time.time)))
+                        val remainingShowTimeMS = (currentShow?.endEpoch!! - Calendar.getInstance().time.time)
+                        val diffOfPlaybackPosition = (player.contentDuration - remainingShowTimeMS) - player.contentPosition
+
+                        if(diffOfPlaybackPosition> 10000 && arrayOf("154","155","162","289","291","471","474","476","483","514","524","525","872","1393","1396").contains(metadata.id)){
+                            var seekPostion =  player.contentDuration - remainingShowTimeMS
+                            Log.d(TAG,"SEEK POSITION ======" + seekPostion.toString()+ " contentDuration === "+ player.contentDuration)
+                            seekTo(seekPostion)
+                        }
+                    }
+                }
+                override fun onPreparedStateChanged(glue: PlaybackGlue?) {
+                    super.onPreparedStateChanged(glue)
+                    if (glue?.isPrepared == true) {
+                        // When playback is ready, skip to last known position
 //                        val startingPosition = metadata.playbackPositionMillis ?: 0
 //                        Log.d(TAG, "Setting starting playback position to $startingPosition")
-//                        seekTo(startingPosition)
+//                        seekTo(0)
+                    }
+                }
+
+                override fun onPlayCompleted(glue: PlaybackGlue?) {
+                    super.onPlayCompleted(glue)
+//                    var nextShow = findNextShow()
+//                    if(nextShow?.isPastEpisode == true) {
+//                        // Don't forget to remove irrelevant content from the continue watching row
+//                        lifecycleScope.launch(Dispatchers.IO) {
+//                            startPlayingCurrentShow(nextShow)
+//                        }
 //                    }
-//                }
-//
-//                override fun onPlayCompleted(glue: PlaybackGlue?) {
-//                    super.onPlayCompleted(glue)
-//
-//                    // Don't forget to remove irrelevant content from the continue watching row
-//                    TvLauncherUtils.removeFromWatchNext(requireContext(), args.metadata)
-//
-//                    // When playback is finished, go back to the previous screen
-//                    val navController = Navigation.findNavController(
-//                            requireActivity(), R.id.fragment_container)
-//                    navController.currentDestination?.id?.let {
-//                        navController.popBackStack(it, true)
-//                    }
-//                }
-//            })
+                }
+            })
 
             // Begins playback automatically
             playWhenPrepared()
@@ -385,6 +472,7 @@ class NowPlayingFragment : VideoSupportFragment() {
         }
 
         adapter = arrayObjectAdapter
+
         // Adds key listeners
         playerGlue.host.setOnKeyInterceptListener { view, keyCode, event ->
 
@@ -520,6 +608,14 @@ class NowPlayingFragment : VideoSupportFragment() {
     }
 
     private inner class PlayerEventListener : Player.EventListener {
+//        override fun onPlayerStateChanged(playWhenReady: Boolean, playbackState: Int) {
+//            if (playWhenReady && playbackState == Player.STATE_READY) {
+//                // media actually playing
+//                Log.i(TAG,"started Playing");
+//                Log.i(TAG,player.contentDuration.toString())
+////                player.seekTo(C.TIME_UNSET);
+//            }
+//        }
         override fun onPlayerError(error: ExoPlaybackException) {
 
             Log.e(TAG,"PlayError: ChannelNo: ${metadata.id} Url: ${metadata.contentUri}",error);

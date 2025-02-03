@@ -43,9 +43,9 @@ class MainActivity : FragmentActivity() {
         super.onCreate(savedInstanceState)
 
         AndroidNetworking.initialize(applicationContext)
-        AndroidNetworking.enableLogging() // simply enable logging
+         // AndroidNetworking.enableLogging() // simply enable logging
 
-        AndroidNetworking.enableLogging(HttpLoggingInterceptor.Level.BODY) // enabling logging with level
+//        AndroidNetworking.enableLogging(HttpLoggingInterceptor.Level.BODY) // enabling logging with level
 
 
         setContentView(R.layout.activity_main)
@@ -86,7 +86,9 @@ class MainActivity : FragmentActivity() {
                 else -> Log.w(TAG, "VIEW intent received but unrecognized URI: $uri")
             }
         }
-        if(LiveTvApplication.getMobileNumber() !=null && LiveTvApplication.getAuthHeaders() != null){
+        if(LiveTvApplication.getMobileNumber() !=null && LiveTvApplication.getAuthHeaders()
+                .isNotEmpty()
+        ){
             Log.d(TAG, "Mobile No. "+ LiveTvApplication.getMobileNumber()+ " AuthHeaders Found.")
             TvLauncherUtils.refreshToken()
             Navigation.findNavController(activity, R.id.fragment_container)

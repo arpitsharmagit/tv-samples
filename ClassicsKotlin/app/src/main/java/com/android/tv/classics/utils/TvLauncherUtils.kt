@@ -449,7 +449,7 @@ class TvLauncherUtils private constructor() {
                         headers[Constants.APP_KEY] = "NzNiMDhlYzQyNjJm"
                         headers[Constants.DEVICE_ID] = "94f739da0e91b3a6"
                         headers[Constants.OS] = "Android"
-                        headers[Constants.VERSION_CODE] = "330"
+                        headers[Constants.VERSION_CODE] = "370"
                         headers[Constants.DEVICE_TYPE] = "phone"
                         headers[Constants.USER_GROUP] = "tvYR7NSNn7rymo3F"
                         headers[Constants.LBCOOKIES] ="1"

@@ -41,8 +41,8 @@ public class HttpStore {
         OkHttpClient.Builder builder = new OkHttpClient.Builder();
         HttpLoggingInterceptor httpLoggingInterceptor = new HttpLoggingInterceptor();
         httpLoggingInterceptor.setLevel(HttpLoggingInterceptor.Level.BODY);
-        builder.addInterceptor(httpLoggingInterceptor);
-        builder.addNetworkInterceptor(httpLoggingInterceptor);
+//        builder.addInterceptor(httpLoggingInterceptor);
+//        builder.addNetworkInterceptor(httpLoggingInterceptor);
 
         ArrayList arrayList = new ArrayList();
         arrayList.add(Protocol.HTTP_2);

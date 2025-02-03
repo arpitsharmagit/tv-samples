@@ -114,7 +114,7 @@ dependencies {
     implementation "androidx.work:work-runtime-ktx:$work_version"
 
     // ExoPlayer's leanback extension
-    def exoplayer_version = '2.11.3'
+    def exoplayer_version = '2.13.3'
     implementation "com.google.android.exoplayer:exoplayer-core:$exoplayer_version"
     implementation "com.google.android.exoplayer:exoplayer-ui:$exoplayer_version"
     implementation "com.google.android.exoplayer:exoplayer-hls:$exoplayer_version"
@@ -136,9 +136,13 @@ dependencies {
     implementation "androidx.lifecycle:lifecycle-viewmodel-ktx:$lifeCycleVersion"
     implementation "androidx.lifecycle:lifecycle-livedata-ktx:$lifeCycleVersion"
 
+    implementation("com.fasterxml.jackson.core:jackson-core:2.15.2") // Or latest version
+    implementation("com.fasterxml.jackson.core:jackson-databind:2.15.2") // Or latest version
+    implementation("com.fasterxml.jackson.core:jackson-annotations:2.15.2") // Or latest version
+
     // OkHttp
     implementation 'com.squareup.okhttp3:okhttp:4.0.1'
-    implementation 'com.amitshekhar.android:jackson-android-networking:1.0.2'
+    implementation 'com.github.amitshekhariitbhu.Fast-Android-Networking:android-networking:1.0.4'
 
     // Unit testing
     testImplementation 'androidx.test.ext:junit:1.1.1'

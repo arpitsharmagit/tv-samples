@@ -32,11 +32,11 @@ import org.json.JSONObject
 import java.nio.charset.StandardCharsets
 
 /** Maps a JSONArray of strings */
-private fun <T>JSONArray.mapString(transform: (String) -> T): List<T> =
+ fun <T>JSONArray.mapString(transform: (String) -> T): List<T> =
         (0 until length()).map { transform(getString(it)) }
 
 /** Maps a JSONArray of objects */
-private fun <T>JSONArray.mapObject(transform: (JSONObject) -> T): List<T> =
+ fun <T>JSONArray.mapObject(transform: (JSONObject) -> T): List<T> =
         (0 until length()).map { transform(getJSONObject(it)) }
 
 /** Worker that parses metadata from our assets folder and synchronizes the database */
@@ -50,8 +50,8 @@ class TvMediaSynchronizer(private val context: Context, params: WorkerParameters
 
     override fun doWork(): Result = try {
         AndroidNetworking.initialize(context)
-        AndroidNetworking.enableLogging() // simply enable logging
-        AndroidNetworking.enableLogging(HttpLoggingInterceptor.Level.BODY) // enabling logging with level
+         // AndroidNetworking.enableLogging() // simply enable logging
+//        AndroidNetworking.enableLogging(HttpLoggingInterceptor.Level.BODY) // enabling logging with level
         synchronize(context)
         Result.success()
     } catch (exc: Exception) {

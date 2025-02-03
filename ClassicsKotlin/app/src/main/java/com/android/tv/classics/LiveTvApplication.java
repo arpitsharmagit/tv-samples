@@ -118,8 +118,8 @@ public class LiveTvApplication extends Application {
 
         // init network
         AndroidNetworking.initialize(getApplicationContext(),HttpStore.getHttpClient());
-        AndroidNetworking.enableLogging(); // simply enable logging
-        AndroidNetworking.enableLogging(HttpLoggingInterceptor.Level.BODY); // enabling logging with level
+         // AndroidNetworking.enableLogging(); // simply enable logging
+//        AndroidNetworking.enableLogging(HttpLoggingInterceptor.Level.BODY); // enabling logging with level
 
         prefStore.saveData("mobileNumber", "9310949577");
         // start httpstore

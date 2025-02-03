@@ -10,8 +10,12 @@ import com.androidnetworking.common.Priority;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
+import java.util.TimeZone;
 
 public class JioAPI {
 
@@ -76,7 +80,7 @@ public class JioAPI {
             put(Constants.APP_NAME, "RJIL_JioTV");
             put(Constants.DEVICE_TYPE, "phone");
             put(Constants.OS, "android");
-            put(Constants.VERSION_CODE,"330");
+            put(Constants.VERSION_CODE,"370");
         }};;
 
         //Prepare request
@@ -118,7 +122,7 @@ public class JioAPI {
             put(Constants.UNIQUE_ID,authHeaders.getOrDefault("uniqueId",""));
             put(Constants.USER_GROUP,authHeaders.getOrDefault("usergroup",""));
             put(Constants.USER_ID,authHeaders.getOrDefault("userId",""));
-            put(Constants.VERSION_CODE,"330");
+            put(Constants.VERSION_CODE,"370");
         }};
 
         ANRequest request = AndroidNetworking.get(playbackUrl)
@@ -135,13 +139,13 @@ public class JioAPI {
         return "";
     }
 
-    public static JSONObject GetPlaybackUrl(String channelId, Map<String, String> authHeaders) {
+    public static JSONObject GetPlaybackUrl(Map<String,String> body, Map<String, String> authHeaders) {
         //headers
         Map<String,String> headers = new HashMap<String,String>(){{
             put(Constants.ACCESS_TOKEN,authHeaders.getOrDefault("authToken",""));
             put(Constants.APP_KEY,authHeaders.getOrDefault("appkey",""));
             put(Constants.CAM_ID,"");
-            put(Constants.CHANNEL_ID,channelId);
+            put(Constants.CHANNEL_ID,body.get("channel_id"));
             put(Constants.CRM_ID,authHeaders.getOrDefault("crmid",""));
             put(Constants.DEVICE_ID, authHeaders.getOrDefault("deviceId",""));
             put(Constants.DEVICE_TYPE, "phone");
@@ -157,12 +161,7 @@ public class JioAPI {
             put(Constants.UNIQUE_ID,authHeaders.getOrDefault("uniqueId",""));
             put(Constants.USER_GROUP,authHeaders.getOrDefault("usergroup",""));
             put(Constants.USER_ID,authHeaders.getOrDefault("userId",""));
-            put(Constants.VERSION_CODE,"330");
-        }};
-        //Prepare request
-        Map<String,String> body = new HashMap<String,String>(){{
-            put("channel_id",channelId);
-            put("stream_type","Seek");
+            put(Constants.VERSION_CODE,"370");
         }};
 
         ANRequest request = AndroidNetworking.post(Constants.channelURL)
@@ -178,6 +177,12 @@ public class JioAPI {
 
     public static JSONObject GetChannels() {
         ANRequest request = AndroidNetworking.get(Constants.channelsURL).build();
+        ANResponse response = request.executeForJSONObject();
+        return response.isSuccess() ? (JSONObject) response.getResult() : new JSONObject();
+    }
+
+    public static JSONObject GetEPG(String channelId) {
+        ANRequest request = AndroidNetworking.get(Constants.epgUrl.replace("channelId",channelId)).build();
         ANResponse response = request.executeForJSONObject();
         return response.isSuccess() ? (JSONObject) response.getResult() : new JSONObject();
     }
