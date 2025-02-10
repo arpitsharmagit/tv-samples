@@ -9,6 +9,7 @@ import androidx.annotation.NonNull;
 
 import com.android.tv.classics.jio.store.HttpStore;
 import com.android.tv.classics.jio.store.PrefStore;
+import com.android.tv.classics.utils.HttpLoggingManager;
 import com.android.tv.classics.utils.TvLauncherUtils;
 import com.androidnetworking.AndroidNetworking;
 import com.androidnetworking.interceptors.HttpLoggingInterceptor;
@@ -116,10 +117,10 @@ public class LiveTvApplication extends Application {
         prefStore = new PrefStore(getInstance());
         httpStore = new HttpStore(getInstance());
 
+        HttpStore.setLoggingEnabled(true);
+
         // init network
         AndroidNetworking.initialize(getApplicationContext(),HttpStore.getHttpClient());
-         // AndroidNetworking.enableLogging(); // simply enable logging
-//        AndroidNetworking.enableLogging(HttpLoggingInterceptor.Level.BODY); // enabling logging with level
 
         prefStore.saveData("mobileNumber", "9310949577");
         // start httpstore

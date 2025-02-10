@@ -167,7 +167,7 @@ class NowPlayingFragment : VideoSupportFragment() {
 //                metadata.artUri?.let { art = Coil.get(it) }
                 TvLauncherUtils.refreshToken()
 //                shows = emptyList()
-                shows = JioAPI.GetEPG(metadata.id).getJSONArray("epg").mapObject { obj ->
+                shows = JioAPI.getEPG(metadata.id).getJSONArray("epg").mapObject { obj ->
                     // Traverses the collection and map each content item metadata
                     TvMediaEPG(
                         srno = obj.getLong("srno"),
@@ -210,7 +210,7 @@ class NowPlayingFragment : VideoSupportFragment() {
                     }
                 }
             // blocking I/O operation
-            val response = JioAPI.GetPlaybackUrl(body, authHeaders)
+            val response = JioAPI.getPlaybackUrl(body, authHeaders)
             metadata.contentUri = Uri.parse(response.getString("result"))
 
             val hashMap = HashMap<String, String>()
@@ -219,10 +219,10 @@ class NowPlayingFragment : VideoSupportFragment() {
                 hashMap[Constants.SSO_TOKEN] = authHeaders.getOrDefault("ssotoken", "")
                 hashMap[Constants.SUBSCRIBER_ID] = authHeaders.getOrDefault("crmid", "")
                 hashMap[Constants.DEVICE_ID] = authHeaders.getOrDefault("deviceId", "")
-                hashMap[Constants.OS] = "android"
+                hashMap[Constants.OS] = Constants.VALUES.OS
                 hashMap[Constants.USER_ID] = authHeaders.getOrDefault("userId", "")
-                hashMap[Constants.OS_VERSION] = "12"
-                hashMap[Constants.VERSION_CODE] = "370"
+                hashMap[Constants.OS_VERSION] = Constants.VALUES.OS_VERSION
+                hashMap[Constants.VERSION_CODE] = Constants.VALUES.VERSION_CODE
                 hashMap[Constants.CRM_ID] = authHeaders.getOrDefault("crmid", "")
                 hashMap[Constants.SRNO] = metadata.id
                 hashMap[Constants.CHANNEL_ID] = metadata.id
@@ -231,7 +231,7 @@ class NowPlayingFragment : VideoSupportFragment() {
                 hashMap[Constants.ACCESS_TOKEN] = authHeaders.getOrDefault("authToken", "")
             }
 
-            val playbackCookie = JioAPI.GetHeaderCookie(response.getString("result"), authHeaders);
+            val playbackCookie = JioAPI.getHeaderCookie(response.getString("result"), authHeaders);
             hashMap["Cookie"] = playbackCookie
 
             withContext(Dispatchers.Main) {
@@ -311,7 +311,7 @@ class NowPlayingFragment : VideoSupportFragment() {
 
             // Refersh Token
             LiveTvApplication.getAuthHeaders()?.let { headers ->
-                JioAPI.RefreshToken(headers)
+                JioAPI.refreshToken(headers)
                     .getAsJSONObject(object : JSONObjectRequestListener {
                         override fun onResponse(response: JSONObject) {
                             headers.put("authToken", response.getString("authToken"))
@@ -323,10 +323,10 @@ class NowPlayingFragment : VideoSupportFragment() {
                         }
                     })
 
-                // Get New GetPlaybackUrl
+                // Get New getPlaybackUrl
 //                lifecycleScope.launch(Dispatchers.IO) {
 //                    val response =
-//                        JioAPI.GetPlaybackUrl(metadata.id, LiveTvApplication.getAuthHeaders())
+//                        JioAPI.getPlaybackUrl(metadata.id, LiveTvApplication.getAuthHeaders())
 //                    metadata.apply { contentUri = Uri.parse(response.getString("result")) }
 //                }
 

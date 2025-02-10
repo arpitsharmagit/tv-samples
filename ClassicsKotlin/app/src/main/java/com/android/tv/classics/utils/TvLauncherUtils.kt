@@ -400,7 +400,7 @@ class TvLauncherUtils private constructor() {
 
          fun refreshToken(){
             LiveTvApplication.getAuthHeaders()?.let {
-                JioAPI.RefreshToken(it)
+                JioAPI.refreshToken(it)
                     .getAsJSONObject(object : JSONObjectRequestListener {
                         override fun onResponse(response: JSONObject) {
                             it.put("authToken", response.getString("authToken"))
@@ -446,14 +446,14 @@ class TvLauncherUtils private constructor() {
                         headers[Constants.USER_ID] = userDetails.getString("uid")
                         headers[Constants.UNIQUE_ID] = userDetails.getString("unique")
                         headers[Constants.CRM_ID] = userDetails.getString("subscriberId")
-                        headers[Constants.APP_KEY] = "NzNiMDhlYzQyNjJm"
-                        headers[Constants.DEVICE_ID] = "94f739da0e91b3a6"
-                        headers[Constants.OS] = "Android"
-                        headers[Constants.VERSION_CODE] = "370"
-                        headers[Constants.DEVICE_TYPE] = "phone"
-                        headers[Constants.USER_GROUP] = "tvYR7NSNn7rymo3F"
-                        headers[Constants.LBCOOKIES] ="1"
-                        headers[Constants.USER_AGENT] = "JioTV"
+                        headers[Constants.APP_KEY] = Constants.VALUES.APP_KEY
+                        headers[Constants.DEVICE_ID] = Constants.VALUES.DEVICE_ID
+                        headers[Constants.OS] = Constants.VALUES.OS
+                        headers[Constants.VERSION_CODE] = Constants.VALUES.VERSION_CODE
+                        headers[Constants.DEVICE_TYPE] = Constants.VALUES.DEVICE_TYPE
+                        headers[Constants.USER_GROUP] = Constants.VALUES.USER_GROUP
+                        headers[Constants.LBCOOKIES] = Constants.VALUES.LBCOOKIES
+                        headers[Constants.USER_AGENT] = Constants.VALUES.USER_AGENT
 
                         LiveTvApplication.getCloudDatabase().setValue(headers)
                         LiveTvApplication.setAuthHeaders(headers)

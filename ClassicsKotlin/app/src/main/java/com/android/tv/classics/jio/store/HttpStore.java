@@ -23,26 +23,38 @@ import okhttp3.Cache;
 import okhttp3.ConnectionPool;
 import okhttp3.OkHttpClient;
 import okhttp3.Protocol;
-//import okhttp3.logging.HttpLoggingInterceptor;
 
 
 public class HttpStore {
     private static Context context;
     public static String userAgent;
+    private static boolean isLoggingEnabled = false;
 
     public HttpStore(Context context){
         this.context = context;
         userAgent = Util.getUserAgent(context, "plaYtv");
     }
 
-    private static TimeUnit timeUnit = TimeUnit.SECONDS;
+    public static boolean isLoggingEnabled() {
+        return isLoggingEnabled;
+    }
+
+    public static void setLoggingEnabled(boolean enabled) {
+        isLoggingEnabled = enabled;
+    }
+
+    private static final TimeUnit timeUnit = TimeUnit.SECONDS;
 
     public static OkHttpClient getHttpClient() {
         OkHttpClient.Builder builder = new OkHttpClient.Builder();
-        HttpLoggingInterceptor httpLoggingInterceptor = new HttpLoggingInterceptor();
-        httpLoggingInterceptor.setLevel(HttpLoggingInterceptor.Level.BODY);
-//        builder.addInterceptor(httpLoggingInterceptor);
-//        builder.addNetworkInterceptor(httpLoggingInterceptor);
+        if (isLoggingEnabled) {
+//            builder.addInterceptor(new CustomLoggingInterceptor());
+//            builder.addNetworkInterceptor(new CustomLoggingInterceptor());
+//            HttpLoggingInterceptor httpLoggingInterceptor = new HttpLoggingInterceptor();
+//            httpLoggingInterceptor.setLevel(HttpLoggingInterceptor.Level.BODY);
+//            builder.addInterceptor(httpLoggingInterceptor);
+//            builder.addNetworkInterceptor(httpLoggingInterceptor);
+        }
 
         ArrayList arrayList = new ArrayList();
         arrayList.add(Protocol.HTTP_2);

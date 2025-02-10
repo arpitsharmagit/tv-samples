@@ -65,7 +65,7 @@ class TvMediaSynchronizer(private val context: Context, params: WorkerParameters
         private fun parseMediaFeed(context: Context): FeedParseResult {
             // Reads JSON input into a JSONArray
             // We are using a local file, in your app you most likely will be using a remote URL
-            val data = JioAPI.GetChannels()
+            val data = JioAPI.getChannels()
 //            val stream = context.resources.assets.open("jio-feed.json")
 //            val data = JSONObject(
 //                String(stream.readBytes(), StandardCharsets.UTF_8)

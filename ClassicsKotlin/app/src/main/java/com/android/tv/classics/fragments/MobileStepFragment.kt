@@ -27,7 +27,7 @@ class MobileStepFragment: GuidedStepSupportFragment() {
     }
 
     override fun onCreateActions(actions: MutableList<GuidedAction>, savedInstanceState: Bundle?) {
-        val mobileEditor =  GuidedAction.Builder(activity).infoOnly(true).title("Mobile Number").description("9997903005").build();
+        val mobileEditor =  GuidedAction.Builder(activity).infoOnly(true).title("Mobile Number").description("9310949577").build();
         val nextAction =  GuidedAction.Builder(activity).id(NEXT).title("Login").build();
         actions.add(mobileEditor)
         actions.add(nextAction)

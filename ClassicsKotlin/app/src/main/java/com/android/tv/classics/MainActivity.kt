@@ -43,9 +43,8 @@ class MainActivity : FragmentActivity() {
         super.onCreate(savedInstanceState)
 
         AndroidNetworking.initialize(applicationContext)
-         // AndroidNetworking.enableLogging() // simply enable logging
-
-//        AndroidNetworking.enableLogging(HttpLoggingInterceptor.Level.BODY) // enabling logging with level
+        AndroidNetworking.enableLogging() // simply enable logging
+        AndroidNetworking.enableLogging(HttpLoggingInterceptor.Level.BODY) // enabling logging with level
 
 
         setContentView(R.layout.activity_main)
