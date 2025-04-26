@@ -403,9 +403,10 @@ class TvLauncherUtils private constructor() {
                 JioAPI.refreshToken(it)
                     .getAsJSONObject(object : JSONObjectRequestListener {
                         override fun onResponse(response: JSONObject) {
-                            it.put("authToken", response.getString("authToken"))
-                            LiveTvApplication.setAuthHeaders(it)
-                            Log.d(TAG,"Refreshed Token ["+ response.getString("authToken")+ "] and updated ["+ LiveTvApplication.getAuthHeaders().get("authToken") +"]")
+                            val updatedHeaders = it.toMutableMap()
+                            updatedHeaders["authToken"] = response.getString("authToken")
+                            LiveTvApplication.setAuthHeaders(updatedHeaders)
+                            Log.d(TAG,"Refreshed Token ["+ response.getString("authToken")+ "] and updated ["+ LiveTvApplication.getAuthHeaders()["authToken"] +"]")
 //                            LiveTvApplication.showToast("Token Refreshed")
                         }
 

@@ -27,7 +27,8 @@
 
     <action
         android:id="@+id/action_to_now_playing"
-        app:destination="@id/now_playing_fragment" />
+        app:destination="@id/now_playing_fragment"
+        app:launchSingleTop="true" />
 
     <fragment
         android:id="@+id/media_browser_fragment"

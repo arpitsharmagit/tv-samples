@@ -50,9 +50,29 @@ class MainActivity : FragmentActivity() {
         setContentView(R.layout.activity_main)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
+        handleIntent(intent)
+
+        // NOTE: It's very important to keep our api token fresh
+//        WorkManager.getInstance(baseContext).enqueue(
+//                PeriodicWorkRequestBuilder<TvTokenRefresher>(60, TimeUnit.MINUTES)
+//                        .setInitialDelay(30, TimeUnit.MINUTES)
+//                        .setConstraints(Constraints.Builder()
+//                                .setRequiredNetworkType(NetworkType.CONNECTED)
+//                                .build())
+//                        .build())
+    }
+    
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        Log.d(TAG, "onNewIntent called")
+        setIntent(intent)
+        handleIntent(intent)
+    }
+    
+    private fun handleIntent(intent: Intent) {
         val activity = this
         val db = TvMediaDatabase.getInstance(this)
-
+        
         // Navigates to other fragments based on Intent's action
         // [MainActivity] is the main entry point for all intent filters
         if (intent.action == Intent.ACTION_VIEW || intent.action == Intent.ACTION_SEARCH) {
@@ -84,27 +104,32 @@ class MainActivity : FragmentActivity() {
 
                 else -> Log.w(TAG, "VIEW intent received but unrecognized URI: $uri")
             }
-        }
-        if(LiveTvApplication.getMobileNumber() !=null && LiveTvApplication.getAuthHeaders()
+        } else if(LiveTvApplication.getMobileNumber() !=null && LiveTvApplication.getAuthHeaders()
                 .isNotEmpty()
         ){
             Log.d(TAG, "Mobile No. "+ LiveTvApplication.getMobileNumber()+ " AuthHeaders Found.")
             TvLauncherUtils.refreshToken()
             Navigation.findNavController(activity, R.id.fragment_container)
                 .navigate(NavGraphDirections.actionToMediaBrowser())
-
-        }else{
+        } else {
             Navigation.findNavController(activity, R.id.fragment_container)
                 .navigate(NavGraphDirections.actionMobileStep())
         }
-
-        // NOTE: It's very important to keep our api token fresh
-//        WorkManager.getInstance(baseContext).enqueue(
-//                PeriodicWorkRequestBuilder<TvTokenRefresher>(60, TimeUnit.MINUTES)
-//                        .setInitialDelay(30, TimeUnit.MINUTES)
-//                        .setConstraints(Constraints.Builder()
-//                                .setRequiredNetworkType(NetworkType.CONNECTED)
-//                                .build())
-//                        .build())
+    }
+    
+    override fun onDestroy() {
+        super.onDestroy()
+        Log.d(TAG, "onDestroy called")
+        // Ensure cleanup of any resources when activity is destroyed
+        val navController = Navigation.findNavController(this, R.id.fragment_container)
+        try {
+            // Check if any fragment is in the back stack and clear it
+            if (navController.currentDestination?.id != R.id.mobile_step_fragment && 
+                navController.currentDestination?.id != R.id.media_browser_fragment) {
+                navController.popBackStack(R.id.media_browser_fragment, false)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error cleaning up fragments", e)
+        }
     }
 }

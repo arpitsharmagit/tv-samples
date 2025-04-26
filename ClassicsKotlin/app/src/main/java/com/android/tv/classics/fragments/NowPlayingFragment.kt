@@ -198,17 +198,14 @@ class NowPlayingFragment : VideoSupportFragment() {
             val endTime = simpleDateFormat.format(show?.endEpoch)
             val programId = show?.srno.toString()
             val srNo = programId.take(6)
-            val body: java.util.HashMap<String?, String?> =
-                object : java.util.HashMap<String?, String?>() {
-                    init {
-                        put("channel_id", metadata.id)
-                        put("stream_type", "Seek")
-                        put("srno", srNo)
-                        put("programId", programId)
-                        put("begin", beginTime)
-                        put("end", endTime)
-                    }
-                }
+            val body = mapOf(
+                "channel_id" to metadata.id,
+                "stream_type" to "Seek",
+                "srno" to srNo,
+                "programId" to programId,
+                "begin" to beginTime,
+                "end" to endTime
+            )
             // blocking I/O operation
             val response = JioAPI.getPlaybackUrl(body, authHeaders)
             metadata.contentUri = Uri.parse(response.getString("result"))
@@ -314,8 +311,9 @@ class NowPlayingFragment : VideoSupportFragment() {
                 JioAPI.refreshToken(headers)
                     .getAsJSONObject(object : JSONObjectRequestListener {
                         override fun onResponse(response: JSONObject) {
-                            headers.put("authToken", response.getString("authToken"))
-                            LiveTvApplication.setAuthHeaders(headers)
+                            val updatedHeaders = headers.toMutableMap()
+                            updatedHeaders["authToken"] = response.getString("authToken")
+                            LiveTvApplication.setAuthHeaders(updatedHeaders)
                         }
 
                         override fun onError(error: ANError) {
@@ -486,10 +484,14 @@ class NowPlayingFragment : VideoSupportFragment() {
                 Log.d(TAG, "Intercepting BACK key for fragment navigation")
                 if (player != null){
                     player.stop();
+                    player.release();
                 }
                 val navController = Navigation.findNavController(
                         requireActivity(), R.id.fragment_container)
                 navController.currentDestination?.id?.let { navController.popBackStack(it, true) }
+                // Explicitly cleanup resources
+                mediaSession.isActive = false
+                mediaSessionConnector.setPlayer(null)
                 return@setOnKeyInterceptListener true
             }
 

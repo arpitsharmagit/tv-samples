@@ -1,0 +1,184 @@
+package com.android.tv.classics.jio
+
+import com.android.tv.classics.LiveTvApplication
+import com.androidnetworking.AndroidNetworking
+import com.androidnetworking.common.ANRequest
+import com.androidnetworking.common.ANResponse
+import com.androidnetworking.common.Priority
+import org.json.JSONException
+import org.json.JSONObject
+
+object JioAPI {
+    private val BASE_HEADERS = mapOf(
+        Constants.APP_NAME to Constants.VALUES.APP_NAME,
+        Constants.DEVICE_TYPE to Constants.VALUES.DEVICE_ID,
+        Constants.OS to Constants.VALUES.OS
+    )
+
+    private fun createHeaders(additionalHeaders: Map<String, String>): Map<String, String> {
+        val headers = HashMap<String, String>()
+        headers.putAll(BASE_HEADERS)
+        headers.putAll(additionalHeaders)
+        return headers
+    }
+
+    private fun safeParseJson(jsonString: String): JSONObject {
+        return try {
+            JSONObject(jsonString)
+        } catch (e: JSONException) {
+            JSONObject()
+        }
+    }
+
+    fun sendOTP(mobileNumber: String): ANRequest<*> {
+        val formattedNumber = if (mobileNumber.contains("+91")) mobileNumber else "+91$mobileNumber"
+        
+        val jsonObject = JSONObject()
+        try {
+            jsonObject.put("number", Utils.encodePhoneNumber(formattedNumber))
+        } catch (e: JSONException) {
+            e.printStackTrace()
+        }
+
+        return AndroidNetworking.post(Constants.otpURL)
+            .addJSONObjectBody(jsonObject)
+            .addHeaders(BASE_HEADERS)
+            .setPriority(Priority.MEDIUM)
+            .build()
+    }
+
+    fun verifyOTP(phoneNumber: String, otp: String): ANRequest<*> {
+        val jsonObject = safeParseJson(
+            Utils.getJsonFromAssets(LiveTvApplication.getInstance().applicationContext, "login-request.json") ?: "{}"
+        )
+        
+        try {
+            jsonObject.put("number", Utils.encodePhoneNumber(phoneNumber))
+            jsonObject.put("otp", otp)
+        } catch (e: JSONException) {
+            e.printStackTrace()
+        }
+
+        return AndroidNetworking.post(Constants.verifyURL)
+            .addJSONObjectBody(jsonObject)
+            .addHeaders(BASE_HEADERS)
+            .setPriority(Priority.MEDIUM)
+            .build()
+    }
+
+    fun refreshToken(authHeaders: Map<String, String>): ANRequest<*> {
+        val additionalHeaders = hashMapOf(
+            Constants.ACCESS_TOKEN to (authHeaders["authToken"] ?: ""),
+            Constants.UNIQUE_ID to (authHeaders["uniqueId"] ?: ""),
+            Constants.VERSION_CODE to Constants.VALUES.VERSION_CODE
+        )
+        val headers = createHeaders(additionalHeaders)
+
+        val jsonObject = JSONObject()
+        try {
+            jsonObject.put(Constants.APP_NAME, "RJIL_JioTV")
+            jsonObject.put(Constants.DEVICE_ID, authHeaders["deviceId"] ?: "")
+            jsonObject.put(Constants.REFRESH_TOKEN, authHeaders["refreshToken"] ?: "")
+        } catch (e: JSONException) {
+            e.printStackTrace()
+        }
+
+        return AndroidNetworking.post(Constants.refreshTokenURL)
+            .addJSONObjectBody(jsonObject)
+            .addHeaders(headers)
+            .setPriority(Priority.MEDIUM)
+            .build()
+    }
+
+    fun getHeaderCookie(playbackUrl: String, authHeaders: Map<String, String>): String {
+        val additionalHeaders = hashMapOf(
+            Constants.ACCESS_TOKEN to (authHeaders["authToken"] ?: ""),
+            Constants.APP_KEY to (authHeaders["appkey"] ?: ""),
+            Constants.CRM_ID to (authHeaders["crmid"] ?: ""),
+            Constants.DEVICE_ID to (authHeaders["deviceId"] ?: ""),
+            Constants.SESSIONID to (authHeaders["uniqueId"] ?: ""),
+            Constants.SUBSCRIBER_ID to (authHeaders["crmid"] ?: ""),
+            Constants.UNIQUE_ID to (authHeaders["uniqueId"] ?: ""),
+            Constants.USER_GROUP to (authHeaders["usergroup"] ?: ""),
+            Constants.USER_ID to (authHeaders["userId"] ?: ""),
+            Constants.VERSION_CODE to Constants.VALUES.VERSION_CODE,
+            Constants.DM to Constants.VALUES.DM,
+            Constants.OTT_USER to "false",
+            Constants.LANGUAGE_ID to Constants.VALUES.LANGUAGE_ID,
+            Constants.LBCOOKIES to Constants.VALUES.LBCOOKIES,
+            Constants.OS_VERSION to Constants.VALUES.OS_VERSION
+        )
+        val headers = createHeaders(additionalHeaders)
+
+        val request = AndroidNetworking.get(playbackUrl)
+            .addHeaders(headers)
+            .doNotCacheResponse()
+            .setPriority(Priority.HIGH)
+            .build()
+
+        val response = request.executeForOkHttpResponse()
+        return if (response.isSuccess) {
+            response.okHttpResponse.header("set-cookie") ?: ""
+        } else {
+            ""
+        }
+    }
+
+    fun getPlaybackUrl(body: Map<String, String>, authHeaders: Map<String, String>): JSONObject {
+        val additionalHeaders = hashMapOf(
+            Constants.ACCESS_TOKEN to (authHeaders["authToken"] ?: ""),
+            Constants.APP_KEY to (authHeaders["appkey"] ?: ""),
+            Constants.CHANNEL_ID to (body["channel_id"] ?: ""),
+            Constants.CRM_ID to (authHeaders["crmid"] ?: ""),
+            Constants.DEVICE_ID to (authHeaders["deviceId"] ?: ""),
+            Constants.SESSIONID to (authHeaders["uniqueId"] ?: ""),
+            Constants.SUBSCRIBER_ID to (authHeaders["crmid"] ?: ""),
+            Constants.UNIQUE_ID to (authHeaders["uniqueId"] ?: ""),
+            Constants.USER_GROUP to (authHeaders["usergroup"] ?: ""),
+            Constants.USER_ID to (authHeaders["userId"] ?: ""),
+            Constants.VERSION_CODE to Constants.VALUES.VERSION_CODE,
+            Constants.DM to Constants.VALUES.DM,
+            Constants.OTT_USER to "false",
+            Constants.LANGUAGE_ID to Constants.VALUES.LANGUAGE_ID,
+            Constants.LBCOOKIES to Constants.VALUES.LBCOOKIES,
+            Constants.OS_VERSION to Constants.VALUES.OS_VERSION
+        )
+        val headers = createHeaders(additionalHeaders)
+
+        val request = AndroidNetworking.post(Constants.channelURL)
+            .addHeaders(headers)
+            .doNotCacheResponse()
+            .addUrlEncodeFormBodyParameter(body)
+            .setPriority(Priority.HIGH)
+            .build()
+
+        val response = request.executeForJSONObject()
+        return if (response.isSuccess) {
+            response.result as JSONObject
+        } else {
+            JSONObject()
+        }
+    }
+
+    fun getChannels(): JSONObject {
+        val request = AndroidNetworking.get(Constants.channelsURL).build()
+        val response = request.executeForJSONObject()
+        return if (response.isSuccess) {
+            response.result as JSONObject
+        } else {
+            JSONObject()
+        }
+    }
+
+    fun getEPG(channelId: String): JSONObject {
+        val request = AndroidNetworking.get(
+            Constants.epgUrl.replace("channelId", channelId)
+        ).build()
+        val response = request.executeForJSONObject()
+        return if (response.isSuccess) {
+            response.result as JSONObject
+        } else {
+            JSONObject()
+        }
+    }
+}

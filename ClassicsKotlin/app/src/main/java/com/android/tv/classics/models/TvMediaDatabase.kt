@@ -46,7 +46,7 @@ class TvMediaConverters {
 
 /** Room database implementation */
 @TypeConverters(TvMediaConverters::class)
-@Database(version = 1, entities = [
+@Database(version = 1, exportSchema = false, entities = [
     TvMediaMetadata::class, TvMediaCollection::class, TvMediaBackground::class])
 abstract class TvMediaDatabase : RoomDatabase() {
     abstract fun metadata(): TvMediaMetadataDAO
