@@ -11,7 +11,7 @@ import com.android.tv.classics.LiveTvApplication
 import com.android.tv.classics.NavGraphDirections
 import com.android.tv.classics.R
 import com.android.tv.classics.utils.TvLauncherUtils
-import kotlinx.coroutines.GlobalScope
+import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -44,9 +44,15 @@ class MobileStepFragment: GuidedStepSupportFragment() {
             LiveTvApplication.setMobileNumber(mobileNumber)
 
             if(LiveTvApplication.getAuthHeaders().isNotEmpty()){
-                TvLauncherUtils.refreshToken()
-                Navigation.findNavController(requireActivity(), R.id.fragment_container)
-                    .navigate(NavGraphDirections.actionToMediaBrowser());
+                lifecycleScope.launch {
+                    try {
+                        TvLauncherUtils.refreshToken()
+                    } catch (e: Exception) {
+                        Log.e("MobileStepFragment", "Error refreshing token", e)
+                    }
+                    Navigation.findNavController(requireActivity(), R.id.fragment_container)
+                        .navigate(NavGraphDirections.actionToMediaBrowser())
+                }
             }else{
                 // Go to OTP Screen after sending TokenMobileStepFragment
                 TvLauncherUtils.sendOTP(mobileNumber)

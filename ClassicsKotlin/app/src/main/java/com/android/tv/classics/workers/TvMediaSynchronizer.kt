@@ -27,6 +27,7 @@ import com.android.tv.classics.models.*
 import com.android.tv.classics.utils.TvLauncherUtils
 import com.androidnetworking.AndroidNetworking
 import com.androidnetworking.interceptors.HttpLoggingInterceptor
+import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONObject
 import java.nio.charset.StandardCharsets
@@ -62,7 +63,7 @@ class TvMediaSynchronizer(private val context: Context, params: WorkerParameters
         private val TAG = TvMediaSynchronizer::class.java.simpleName
 
         /** Fetches the metadata feed from our assets folder and parses its metadata */
-        private fun parseMediaFeed(context: Context): FeedParseResult {
+        private suspend fun parseMediaFeed(context: Context): FeedParseResult {
             // Reads JSON input into a JSONArray
             // We are using a local file, in your app you most likely will be using a remote URL
             val data = JioAPI.getChannels()
@@ -116,7 +117,9 @@ class TvMediaSynchronizer(private val context: Context, params: WorkerParameters
             Log.d(TAG, "Starting synchronization work")
             val database = TvMediaDatabase.getInstance(context)
 
-            val feed = parseMediaFeed(context)
+            // Run in a blocking context since this is called from a Worker
+            runBlocking {
+                val feed = parseMediaFeed(context)
 
             // Gets a list of the metadata IDs for comparisons
             val metadataIdList = feed.metadata.map { it.id }
@@ -152,6 +155,7 @@ class TvMediaSynchronizer(private val context: Context, params: WorkerParameters
                 .forEach {
                     database.collections().insert(it)
                 }
+            }
 
             // Upon insert, we will replace all metadata already added so we can update titles,
             // images, descriptions, etc. Note that we overloaded the `equals` function in our data

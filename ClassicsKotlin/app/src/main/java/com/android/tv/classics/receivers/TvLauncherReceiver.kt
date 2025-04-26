@@ -30,6 +30,8 @@ import com.android.tv.classics.models.TvMediaMetadata
 import com.android.tv.classics.workers.TvMediaSynchronizer
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.lifecycleScope
 
 /*
  * This [BroadcastReceiver] is invoked when the home screen launcher sends an explicit broadcast
@@ -44,7 +46,7 @@ import kotlinx.coroutines.launch
 class TvLauncherReceiver : BroadcastReceiver() {
 
     /** Execute the broadcast listener in a co-routine */
-    override fun onReceive(context: Context, intent: Intent) { GlobalScope.launch {
+    override fun onReceive(context: Context, intent: Intent) {
         Log.d(TAG, "onReceive ${intent.action}")
         val database = TvMediaDatabase.getInstance(context)
 
@@ -89,8 +91,11 @@ class TvLauncherReceiver : BroadcastReceiver() {
                 // Retrieve the metadata item that matches this ID and mark it as hidden
                 updateMetadata(context, database, programId) { it.apply { hidden = true }}
             }
+            else -> {
+                Log.w(TAG, "Unknown action: ${intent.action}")
+            }
         }
-    } }
+    }
 
     /** Helper function used to update the media metadata for a given program ID */
     private fun updateMetadata(

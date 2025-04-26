@@ -5,6 +5,8 @@ import com.androidnetworking.AndroidNetworking
 import com.androidnetworking.common.ANRequest
 import com.androidnetworking.common.ANResponse
 import com.androidnetworking.common.Priority
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.json.JSONException
 import org.json.JSONObject
 
@@ -90,7 +92,7 @@ object JioAPI {
             .build()
     }
 
-    fun getHeaderCookie(playbackUrl: String, authHeaders: Map<String, String>): String {
+    suspend fun getHeaderCookie(playbackUrl: String, authHeaders: Map<String, String>): String = withContext(Dispatchers.IO) {
         val additionalHeaders = hashMapOf(
             Constants.ACCESS_TOKEN to (authHeaders["authToken"] ?: ""),
             Constants.APP_KEY to (authHeaders["appkey"] ?: ""),
@@ -117,14 +119,14 @@ object JioAPI {
             .build()
 
         val response = request.executeForOkHttpResponse()
-        return if (response.isSuccess) {
+        if (response.isSuccess) {
             response.okHttpResponse.header("set-cookie") ?: ""
         } else {
             ""
         }
     }
 
-    fun getPlaybackUrl(body: Map<String, String>, authHeaders: Map<String, String>): JSONObject {
+    suspend fun getPlaybackUrl(body: Map<String, String>, authHeaders: Map<String, String>): JSONObject = withContext(Dispatchers.IO) {
         val additionalHeaders = hashMapOf(
             Constants.ACCESS_TOKEN to (authHeaders["authToken"] ?: ""),
             Constants.APP_KEY to (authHeaders["appkey"] ?: ""),
@@ -153,29 +155,25 @@ object JioAPI {
             .build()
 
         val response = request.executeForJSONObject()
-        return if (response.isSuccess) {
+        if (response.isSuccess) {
             response.result as JSONObject
         } else {
             JSONObject()
         }
     }
 
-    fun getChannels(): JSONObject {
+    suspend fun getChannels(): JSONObject = withContext(Dispatchers.IO) {
         val request = AndroidNetworking.get(Constants.channelsURL).build()
         val response = request.executeForJSONObject()
-        return if (response.isSuccess) {
-            response.result as JSONObject
-        } else {
-            JSONObject()
-        }
+        if (response.isSuccess) response.result as JSONObject else JSONObject()
     }
 
-    fun getEPG(channelId: String): JSONObject {
+    suspend fun getEPG(channelId: String): JSONObject = withContext(Dispatchers.IO) {
         val request = AndroidNetworking.get(
             Constants.epgUrl.replace("channelId", channelId)
         ).build()
         val response = request.executeForJSONObject()
-        return if (response.isSuccess) {
+        if (response.isSuccess) {
             response.result as JSONObject
         } else {
             JSONObject()

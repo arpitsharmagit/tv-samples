@@ -28,9 +28,9 @@ import com.android.tv.classics.utils.TvLauncherUtils
 import com.androidnetworking.AndroidNetworking
 import com.androidnetworking.interceptors.HttpLoggingInterceptor
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.lifecycle.lifecycleScope
 
 
 /** Entry point for the Android TV application */
@@ -81,7 +81,7 @@ class MainActivity : FragmentActivity() {
             when (uri.pathSegments.firstOrNull()) {
 
                 // Navigates to now playing screen for chosen "program"
-                "program" -> GlobalScope.launch {
+                "program" -> lifecycleScope.launch {
                     uri.lastPathSegment?.let { db.metadata().findById(it) }?.let { metadata ->
                         Log.d(TAG, "Navigating to now playing for $metadata")
                         withContext(Dispatchers.Main) {
@@ -92,7 +92,7 @@ class MainActivity : FragmentActivity() {
                 }
 
                 // Scrolls to chosen "channel" in browse fragment
-                "channel" -> GlobalScope.launch {
+                "channel" -> lifecycleScope.launch {
                     val channelId = uri.lastPathSegment
                     Log.d(TAG, "Navigating to browser for channel $channelId")
                     withContext(Dispatchers.Main) {
@@ -108,9 +108,15 @@ class MainActivity : FragmentActivity() {
                 .isNotEmpty()
         ){
             Log.d(TAG, "Mobile No. "+ LiveTvApplication.getMobileNumber()+ " AuthHeaders Found.")
-            TvLauncherUtils.refreshToken()
-            Navigation.findNavController(activity, R.id.fragment_container)
-                .navigate(NavGraphDirections.actionToMediaBrowser())
+            lifecycleScope.launch {
+                try {
+                    TvLauncherUtils.refreshToken()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error refreshing token", e)
+                }
+                Navigation.findNavController(activity, R.id.fragment_container)
+                    .navigate(NavGraphDirections.actionToMediaBrowser())
+            }
         } else {
             Navigation.findNavController(activity, R.id.fragment_container)
                 .navigate(NavGraphDirections.actionMobileStep())

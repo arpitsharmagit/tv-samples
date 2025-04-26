@@ -165,9 +165,14 @@ class NowPlayingFragment : VideoSupportFragment() {
             lifecycleScope.launch(Dispatchers.IO) {
                 // set playback row art
 //                metadata.artUri?.let { art = Coil.get(it) }
-                TvLauncherUtils.refreshToken()
+                try {
+                    TvLauncherUtils.refreshToken()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error refreshing token", e)
+                }
 //                shows = emptyList()
-                shows = JioAPI.getEPG(metadata.id).getJSONArray("epg").mapObject { obj ->
+                val epgResponse = JioAPI.getEPG(metadata.id)
+                shows = epgResponse.getJSONArray("epg").mapObject { obj ->
                     // Traverses the collection and map each content item metadata
                     TvMediaEPG(
                         srno = obj.getLong("srno"),
@@ -228,7 +233,7 @@ class NowPlayingFragment : VideoSupportFragment() {
                 hashMap[Constants.ACCESS_TOKEN] = authHeaders.getOrDefault("authToken", "")
             }
 
-            val playbackCookie = JioAPI.getHeaderCookie(response.getString("result"), authHeaders);
+            val playbackCookie = JioAPI.getHeaderCookie(response.getString("result"), authHeaders)
             hashMap["Cookie"] = playbackCookie
 
             withContext(Dispatchers.Main) {

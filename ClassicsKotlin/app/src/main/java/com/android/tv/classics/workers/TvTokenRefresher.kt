@@ -7,6 +7,8 @@ import androidx.work.WorkerParameters
 import com.android.tv.classics.utils.TvLauncherUtils
 import com.androidnetworking.AndroidNetworking
 import com.androidnetworking.interceptors.HttpLoggingInterceptor
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 
 /** Worker that refresh api token */
 class TvTokenRefresher(private val context: Context, params: WorkerParameters) :
@@ -31,7 +33,14 @@ class TvTokenRefresher(private val context: Context, params: WorkerParameters) :
 
         @Synchronized fun synchronize(context: Context) {
             Log.i(TAG, "Starting refresh Token")
-            TvLauncherUtils.refreshToken()
+            // Since Worker already runs on a background thread, we use runBlocking
+            runBlocking {
+                try {
+                    TvLauncherUtils.refreshToken()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error refreshing token", e)
+                }
+            }
         }
     }
 }

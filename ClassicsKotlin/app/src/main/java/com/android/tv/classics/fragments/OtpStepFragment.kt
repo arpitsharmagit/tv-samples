@@ -12,9 +12,11 @@ import com.android.tv.classics.LiveTvApplication
 import com.android.tv.classics.NavGraphDirections
 import com.android.tv.classics.R
 import com.android.tv.classics.utils.TvLauncherUtils
-import kotlinx.coroutines.GlobalScope
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class OtpStepFragment: GuidedStepSupportFragment() {
     companion object {
@@ -44,7 +46,7 @@ class OtpStepFragment: GuidedStepSupportFragment() {
             Log.i(TAG,"Entered OTP $otp")
             TvLauncherUtils.verifyOTP(otp)
 
-            GlobalScope.launch{
+            lifecycleScope.launch{
                 delay(500)
                 LiveTvApplication.getAuthHeaders()?.let{
                     Navigation.findNavController(requireActivity(), R.id.fragment_container)
