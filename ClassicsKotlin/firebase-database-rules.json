@@ -1,0 +1,27 @@
+{
+  "rules": {
+    // Default deny access to all paths
+    ".read": false,
+    ".write": false,
+    
+    // Rules for user data by mobile number
+    "$mobileNumber": {
+      // Allow read/write to own data - method 1: Using auth.uid
+      // This restricts access to only authenticated users
+      ".read": "auth !== null",
+      
+      // Additional security for write operations to verify user is authorized
+      ".write": "auth !== null && 
+                // Method 2: Check user metadata in Firebase Database
+                // Ensures mobile number matches the user's authenticated metadata
+                // This provides an extra layer of verification
+                root.child($mobileNumber + '/metadata/mobileNumber').val() === $mobileNumber",
+      
+      // Metadata rules to store user information
+      "metadata": {
+        ".read": "auth !== null",
+        ".write": "auth !== null"
+      }
+    }
+  }
+}

@@ -5,10 +5,15 @@ import android.content.Context
 import android.util.Log
 import android.widget.Toast
 import androidx.annotation.NonNull
+import androidx.lifecycle.LifecycleCoroutineScope
 import com.android.tv.classics.jio.store.HttpStore
 import com.android.tv.classics.jio.store.PrefStore
+import com.android.tv.classics.utils.FirebaseAuthManager
 import com.android.tv.classics.utils.HttpLoggingManager
 import com.android.tv.classics.utils.TvLauncherUtils
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import com.androidnetworking.AndroidNetworking
 import com.androidnetworking.interceptors.HttpLoggingInterceptor
 import com.google.firebase.database.DataSnapshot
@@ -54,14 +59,16 @@ class LiveTvApplication : Application() {
         }
         
         fun getCloudDatabase(): DatabaseReference {
-            return FirebaseDatabase.getInstance()
-                .getReference(getMobileNumber() ?: "")
+            // Use the authenticated database reference through the FirebaseAuthManager
+            return com.android.tv.classics.utils.FirebaseAuthManager.getUserDatabaseRef()
         }
         
         fun setMobileNumber(newMobileNumber: String?) {
             mobileNumber = newMobileNumber
             prefStore.saveData("mobileNumber", mobileNumber ?: "")
             if (mobileNumber != null) {
+                // Associate the mobile number with the Firebase user
+                FirebaseAuthManager.setUserMetadata(mobileNumber!!)
                 initCloudSettings()
             }
         }
@@ -113,10 +120,15 @@ class LiveTvApplication : Application() {
         // init network
         AndroidNetworking.initialize(applicationContext, HttpStore.getHttpClient())
 
+        // Initialize Firebase Auth Manager
+        FirebaseAuthManager.init()
+        
         prefStore.saveData("mobileNumber", "9310949577")
         // start httpstore
         // initialise APIs
         if (getMobileNumber() != null) {
+            // Authenticate with Firebase (anonymous auth) before accessing database
+            FirebaseAuthManager.signInAnonymously()
             initCloudSettings()
         }
     }
