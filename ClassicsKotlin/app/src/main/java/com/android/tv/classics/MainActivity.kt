@@ -23,6 +23,7 @@ import android.util.Log
 import android.view.WindowManager
 import androidx.fragment.app.FragmentActivity
 import androidx.navigation.Navigation
+import com.android.tv.classics.databinding.ActivityMainBinding
 import com.android.tv.classics.models.TvMediaDatabase
 import com.android.tv.classics.utils.TvLauncherUtils
 import com.androidnetworking.AndroidNetworking
@@ -31,13 +32,15 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.lifecycle.lifecycleScope
-
+import com.android.tv.classics.utils.FocusManager
 
 /** Entry point for the Android TV application */
 class MainActivity : FragmentActivity() {
     companion object {
         private val TAG = MainActivity::class.java.simpleName
     }
+
+    private lateinit var binding: ActivityMainBinding
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -46,8 +49,8 @@ class MainActivity : FragmentActivity() {
         AndroidNetworking.enableLogging() // simply enable logging
         AndroidNetworking.enableLogging(HttpLoggingInterceptor.Level.BODY) // enabling logging with level
 
-
-        setContentView(R.layout.activity_main)
+        binding = ActivityMainBinding.inflate(layoutInflater)
+        setContentView(binding.root)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         handleIntent(intent)
@@ -129,6 +132,9 @@ class MainActivity : FragmentActivity() {
         // Ensure cleanup of any resources when activity is destroyed
         val navController = Navigation.findNavController(this, R.id.fragment_container)
         try {
+            // Clear focus manager state
+            FocusManager.clearAll()
+            
             // Check if any fragment is in the back stack and clear it
             if (navController.currentDestination?.id != R.id.mobile_step_fragment && 
                 navController.currentDestination?.id != R.id.media_browser_fragment) {

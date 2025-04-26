@@ -1,8 +1,9 @@
-package com.android.tv.classics.fragments;
+package com.android.tv.classics.fragments
 
 import android.os.Bundle
 import android.text.InputType
 import android.util.Log
+import android.view.View
 import androidx.appcompat.content.res.AppCompatResources
 import androidx.leanback.app.GuidedStepSupportFragment
 import androidx.leanback.widget.GuidanceStylist.Guidance
@@ -11,12 +12,12 @@ import androidx.navigation.Navigation
 import com.android.tv.classics.LiveTvApplication
 import com.android.tv.classics.NavGraphDirections
 import com.android.tv.classics.R
+import com.android.tv.classics.utils.FocusManager
 import com.android.tv.classics.utils.TvLauncherUtils
 import androidx.lifecycle.lifecycleScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.cancelChildren
 
 class OtpStepFragment: GuidedStepSupportFragment() {
     companion object {
@@ -25,34 +26,71 @@ class OtpStepFragment: GuidedStepSupportFragment() {
     }
 
     override fun onCreateGuidance(savedInstanceState: Bundle?): Guidance {
-        return Guidance("OTP","Enter 6 digit OTP received on ${LiveTvApplication.getMobileNumber()}.","LOGIN -> OTP",
+        return Guidance("OTP", "Enter 6 digit OTP received on ${LiveTvApplication.getMobileNumber()}.", "LOGIN -> OTP",
             AppCompatResources.getDrawable(requireContext(), R.drawable.ic_jasmine_logo))
     }
 
     override fun onCreateActions(actions: MutableList<GuidedAction>, savedInstanceState: Bundle?) {
-        val otpEditor =  GuidedAction.Builder(activity).title("OTP").description("000000").descriptionEditable(true).inputType(InputType.TYPE_CLASS_NUMBER).build()
-        val verifyAction =  GuidedAction.Builder(activity).id(VERIFY).title("VERIFY").build();
+        val otpEditor = GuidedAction.Builder(activity).title("OTP").description("000000").descriptionEditable(true).inputType(InputType.TYPE_CLASS_NUMBER).build()
+        val verifyAction = GuidedAction.Builder(activity).id(VERIFY).title("VERIFY").build()
         actions.add(otpEditor)
         actions.add(verifyAction)
+    }
+    
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+        
+        // Restore focus state if available
+        try {
+            view.post {
+                FocusManager.restoreFocusState(
+                    this, 
+                    R.id.otp_step_fragment, 
+                    view
+                )
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error restoring focus", e)
+        }
     }
 
     override fun onGuidedActionClicked(action: GuidedAction?) {
         if(action!!.id == VERIFY){
             val otp = actions[0].description.toString()
             if(otp.length != 6 || otp == "000000"){
-                LiveTvApplication.showToast("Please enter 6 digit OTP.");
+                LiveTvApplication.showToast("Please enter 6 digit OTP.")
                 return
             }
-            Log.i(TAG,"Entered OTP $otp")
+            Log.i(TAG, "Entered OTP $otp")
             TvLauncherUtils.verifyOTP(otp)
 
             lifecycleScope.launch{
                 delay(500)
                 LiveTvApplication.getAuthHeaders()?.let{
                     Navigation.findNavController(requireActivity(), R.id.fragment_container)
-                        .navigate(NavGraphDirections.actionToMediaBrowser());
+                        .navigate(NavGraphDirections.actionToMediaBrowser())
                 }
             }
         }
+    }
+    
+    override fun onStop() {
+        super.onStop()
+        
+        // Save focus state when stopping
+        try {
+            FocusManager.saveFocusState(
+                this,
+                R.id.otp_step_fragment
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Error saving focus", e)
+        }
+    }
+    
+    override fun onDestroy() {
+        super.onDestroy()
+        // Cancel any ongoing coroutine operations if needed
+        lifecycleScope.coroutineContext.cancelChildren()
     }
 }

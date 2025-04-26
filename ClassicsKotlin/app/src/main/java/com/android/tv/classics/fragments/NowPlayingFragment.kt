@@ -487,16 +487,24 @@ class NowPlayingFragment : VideoSupportFragment() {
             if (!playerGlue.host.isControlsOverlayVisible &&
                     keyCode == KeyEvent.KEYCODE_BACK && event.action == KeyEvent.ACTION_DOWN) {
                 Log.d(TAG, "Intercepting BACK key for fragment navigation")
-                if (player != null){
-                    player.stop();
-                    player.release();
+                try {
+                    // Stop and release the player
+                    player.stop()
+                    player.release()
+                    
+                    // Release media session
+                    mediaSession.isActive = false
+                    mediaSessionConnector.setPlayer(null)
+                    
+                    // Cancel any pending callbacks
+                    view?.removeCallbacks(updateMetadataTask)
+                    
+                    val navController = Navigation.findNavController(
+                            requireActivity(), R.id.fragment_container)
+                    navController.currentDestination?.id?.let { navController.popBackStack(it, true) }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error during back navigation", e)
                 }
-                val navController = Navigation.findNavController(
-                        requireActivity(), R.id.fragment_container)
-                navController.currentDestination?.id?.let { navController.popBackStack(it, true) }
-                // Explicitly cleanup resources
-                mediaSession.isActive = false
-                mediaSessionConnector.setPlayer(null)
                 return@setOnKeyInterceptListener true
             }
 
@@ -546,6 +554,19 @@ class NowPlayingFragment : VideoSupportFragment() {
         super.onViewCreated(view, savedInstanceState)
         view.setBackgroundColor(Color.BLACK)
 //        view.findViewById<View>(R.id.playback_controls_dock)?.visibility = View.GONE
+
+        // Restore focus state if available
+        try {
+            view.post {
+                com.android.tv.classics.utils.FocusManager.restoreFocusState(
+                    this, 
+                    R.id.now_playing_fragment, 
+                    view
+                )
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error restoring focus", e)
+        }
     }
 
     override fun onResume() {
@@ -565,24 +586,52 @@ class NowPlayingFragment : VideoSupportFragment() {
     override fun onPause() {
         super.onPause()
 
-        playerGlue.pause()
-        mediaSession.isActive = false
-        mediaSessionConnector.setPlayer(null)
-
-//        view?.post {
-//            // Launch metadata update task one more time as the fragment becomes paused to ensure
-//            //  that we have the most up-to-date information
-//            updateMetadataTask.run()
-//
-//            // Cancel all future metadata update tasks
-//            view?.removeCallbacks(updateMetadataTask)
-//        }
+        try {
+            // Pause the player
+            playerGlue.pause()
+            
+            // Deactivate the media session
+            mediaSession.isActive = false
+            mediaSessionConnector.setPlayer(null)
+            
+            // Cancel any pending callbacks
+            view?.removeCallbacks(updateMetadataTask)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in onPause", e)
+        }
+    }
+    
+    override fun onStop() {
+        super.onStop()
+        
+        // Save focus state when stopping
+        try {
+            com.android.tv.classics.utils.FocusManager.saveFocusState(
+                this,
+                R.id.now_playing_fragment
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Error saving focus", e)
+        }
     }
 
     /** Do all final cleanup in onDestroy */
     override fun onDestroy() {
         super.onDestroy()
-        mediaSession.release()
+        
+        try {
+            // Release the player
+            player.release()
+            
+            // Release the media session
+            mediaSessionConnector.setPlayer(null)
+            mediaSession.release()
+            
+            // Cancel any pending callbacks
+            view?.removeCallbacks(updateMetadataTask)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error cleaning up resources", e)
+        }
     }
 
     private fun increasePlayCount(){

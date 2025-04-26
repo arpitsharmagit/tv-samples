@@ -203,6 +203,19 @@ class MediaBrowserFragment : BrowseSupportFragment() {
             // Handle special case where the app had no data available e.g. after clearing app data
             val collectionAdapter = adapter as ArrayObjectAdapter
             if (collectionAdapter.size() <= 1) populateAdapter(collectionAdapter)
+            
+            // Restore focus state if available
+            withContext(Dispatchers.Main) {
+                try {
+                    com.android.tv.classics.utils.FocusManager.restoreFocusState(
+                        this@MediaBrowserFragment, 
+                        R.id.media_browser_fragment, 
+                        view
+                    )
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error restoring focus", e)
+                }
+            }
         } }
     }
 
@@ -275,6 +288,37 @@ class MediaBrowserFragment : BrowseSupportFragment() {
         }
     }
 
+    override fun onDestroyView() {
+        // Cancel animation and remove any pending callbacks
+        view?.let { view ->
+            backgroundAnimation?.let { view.removeCallbacks(it) }
+            backgroundAnimation = null
+        }
+        super.onDestroyView()
+    }
+    
+    override fun onStop() {
+        super.onStop()
+        
+        // Save focus state when fragment is stopped (before leaving to another fragment)
+        try {
+            com.android.tv.classics.utils.FocusManager.saveFocusState(
+                this,
+                R.id.media_browser_fragment
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Error saving focus", e)
+        }
+    }
+    
+    override fun onDestroy() {
+        // Cancel any ongoing coroutine jobs
+        if (::synchronizeJob.isInitialized && synchronizeJob.isActive) {
+            synchronizeJob.cancel()
+        }
+        super.onDestroy()
+    }
+    
     companion object {
         private val TAG = MediaBrowserFragment::class.java.simpleName
 
