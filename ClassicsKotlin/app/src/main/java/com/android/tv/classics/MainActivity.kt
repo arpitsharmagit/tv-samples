@@ -61,7 +61,7 @@ class MainActivity : FragmentActivity() {
         appUpdateManager.initialize()
         
         // Check for updates
-         checkForAppUpdates()
+//         checkForAppUpdates()
 
         handleIntent(intent)
 
