@@ -24,7 +24,9 @@ import android.view.WindowManager
 import androidx.fragment.app.FragmentActivity
 import androidx.navigation.Navigation
 import com.android.tv.classics.databinding.ActivityMainBinding
+import com.android.tv.classics.fragments.UpdateDialogFragment
 import com.android.tv.classics.models.TvMediaDatabase
+import com.android.tv.classics.utils.AppUpdateManager
 import com.android.tv.classics.utils.TvLauncherUtils
 import com.androidnetworking.AndroidNetworking
 import com.androidnetworking.interceptors.HttpLoggingInterceptor
@@ -41,6 +43,7 @@ class MainActivity : FragmentActivity() {
     }
 
     private lateinit var binding: ActivityMainBinding
+    private lateinit var appUpdateManager: AppUpdateManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -52,6 +55,13 @@ class MainActivity : FragmentActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        
+        // Initialize update manager
+        appUpdateManager = AppUpdateManager(this)
+        appUpdateManager.initialize()
+        
+        // Check for updates
+         checkForAppUpdates()
 
         handleIntent(intent)
 
@@ -126,9 +136,36 @@ class MainActivity : FragmentActivity() {
         }
     }
     
+    /**
+     * Check for app updates from the remote server
+     */
+    private fun checkForAppUpdates() {
+        lifecycleScope.launch {
+            try {
+                val updateInfo = appUpdateManager.checkForUpdates()
+                
+                if (updateInfo.isUpdateAvailable) {
+                    Log.d(TAG, "Update available: ${updateInfo.versionName}")
+                    
+                    // Show update dialog to the user
+                    val updateDialog = UpdateDialogFragment.newInstance(updateInfo)
+                    updateDialog.show(supportFragmentManager, UpdateDialogFragment.TAG)
+                } else {
+                    Log.d(TAG, "No updates available")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error checking for updates", e)
+            }
+        }
+    }
+    
     override fun onDestroy() {
         super.onDestroy()
         Log.d(TAG, "onDestroy called")
+        
+        // Clean up the app update manager
+        appUpdateManager.destroy()
+        
         // Ensure cleanup of any resources when activity is destroyed
         val navController = Navigation.findNavController(this, R.id.fragment_container)
         try {

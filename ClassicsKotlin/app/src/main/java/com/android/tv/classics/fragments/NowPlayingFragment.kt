@@ -59,6 +59,7 @@ import com.google.android.exoplayer2.util.EventLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.time.Instant
@@ -170,25 +171,69 @@ class NowPlayingFragment : VideoSupportFragment() {
                 } catch (e: Exception) {
                     Log.e(TAG, "Error refreshing token", e)
                 }
-//                shows = emptyList()
-                val epgResponse = JioAPI.getEPG(metadata.id)
-                shows = epgResponse.getJSONArray("epg").mapObject { obj ->
-                    // Traverses the collection and map each content item metadata
-                    TvMediaEPG(
-                        srno = obj.getLong("srno"),
-                        showtime = obj.getString("showtime"),
-                        showname = obj.getString("showname"),
-                        description = obj.getString("description"),
-                        duration = obj.getInt("duration"),
-                        endtime = obj.getString("endtime"),
-                        startEpoch = obj.getLong("startEpoch"),
-                        endEpoch = obj.getLong("endEpoch"),
-                        isPastEpisode = obj.getBoolean("isPastEpisode"),
-                        isCatchupAvailable = obj.getBoolean("isCatchupAvailable"),
-                    )
+                
+                try {
+                    // Get EPG data with error handling
+                    val epgResponse = JioAPI.getEPG(metadata.id)
+                    
+                    // Safe access to the EPG array
+                    val epgArray = if (epgResponse.has("epg")) {
+                        epgResponse.getJSONArray("epg")
+                    } else {
+                        JSONArray()
+                    }
+                    
+                    shows = epgArray.mapObject { obj ->
+                        // Traverses the collection and map each content item metadata using optString/optInt/etc.
+                        try {
+                            TvMediaEPG(
+                                srno = obj.optLong("srno", 0),
+                                showtime = obj.optString("showtime", ""),
+                                showname = obj.optString("showname", "Unknown Show"),
+                                description = obj.optString("description", ""),
+                                duration = obj.optInt("duration", 30),
+                                endtime = obj.optString("endtime", ""),
+                                startEpoch = obj.optLong("startEpoch", System.currentTimeMillis()),
+                                endEpoch = obj.optLong("endEpoch", System.currentTimeMillis() + 1800000), // default 30min
+                                isPastEpisode = obj.optBoolean("isPastEpisode", false),
+                                isCatchupAvailable = obj.optBoolean("isCatchupAvailable", false)
+                            )
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error parsing EPG item", e)
+                            // Return a default item if parsing fails
+                            TvMediaEPG(
+                                srno = 0,
+                                showtime = "",
+                                showname = "Unknown Show",
+                                description = "",
+                                duration = 30,
+                                endtime = "",
+                                startEpoch = System.currentTimeMillis(),
+                                endEpoch = System.currentTimeMillis() + 1800000,
+                                isPastEpisode = false,
+                                isCatchupAvailable = false
+                            )
+                        }
+                    }
+                    
+                    // Only continue if we have show data
+                    if (shows.isNotEmpty()) {
+                        var currentShow = findCurrentShow()
+                        startPlayingCurrentShow(currentShow)
+                    } else {
+                        Log.e(TAG, "No EPG data available for channel ${metadata.id}")
+                        // Show a message to the user
+                        withContext(Dispatchers.Main) {
+                            LiveTvApplication.showToast("No program information available")
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error processing EPG data", e)
+                    // Show error message to user
+                    withContext(Dispatchers.Main) {
+                        LiveTvApplication.showToast("Error loading program information")
+                    }
                 }
-                var currentShow = findCurrentShow()
-                startPlayingCurrentShow(currentShow)
             }
         }
     }

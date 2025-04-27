@@ -1,0 +1,9 @@
+{
+  "versionName": "1.2.0",
+  "versionCode": 120,
+  "downloadUrl": "https://drive.google.com/uc?export=download&id=1w9oaJqmmKr7P3uDM68d5e_FhSrhspWt5",
+  "releaseNotes": "- Improved UI performance\n- Fixed playback issues with certain channels\n- Added new login options\n- Updated libraries for better stability",
+  "updateDate": "2025-04-26",
+  "forceUpdate": false,
+  "minSupportedVersion": 100
+}

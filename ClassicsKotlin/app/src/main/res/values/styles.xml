@@ -26,4 +26,16 @@
         <item name="android:windowFullscreen">true</item>
     </style>
 
+    <!-- Dialog theme for update dialog -->
+    <style name="AppTheme.Dialog" parent="Theme.Leanback">
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:backgroundDimEnabled">true</item>
+        <item name="android:windowIsFloating">true</item>
+        <item name="android:windowContentOverlay">@null</item>
+        <item name="android:windowAnimationStyle">@android:style/Animation.Dialog</item>
+        <item name="android:windowMinWidthMajor">65%</item>
+        <item name="android:windowMinWidthMinor">75%</item>
+    </style>
+
 </resources>

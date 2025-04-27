@@ -64,52 +64,79 @@ class TvMediaSynchronizer(private val context: Context, params: WorkerParameters
 
         /** Fetches the metadata feed from our assets folder and parses its metadata */
         private suspend fun parseMediaFeed(context: Context): FeedParseResult {
-            // Reads JSON input into a JSONArray
-            // We are using a local file, in your app you most likely will be using a remote URL
-            val data = JioAPI.getChannels()
-//            val stream = context.resources.assets.open("jio-feed.json")
-//            val data = JSONObject(
-//                String(stream.readBytes(), StandardCharsets.UTF_8)
-//            )
+            try {
+                // Get channels data from API with error handling
+                val data = JioAPI.getChannels()
+                
+                // Initializes an empty list to populate with metadata metadata
+                val metadatas: MutableList<TvMediaMetadata> = mutableListOf()
+    
+                // Read genre data from assets file
+                val genreData = try {
+                    val genreStream = context.resources.assets.open("jio-genre-map.json")
+                    JSONObject(String(genreStream.readBytes(), StandardCharsets.UTF_8))
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error reading genre data", e)
+                    // Provide fallback data if file can't be read
+                    JSONObject().apply { 
+                        put("genre", JSONArray())
+                    }
+                }
+    
+                // Safely get genre array
+                val genreArray = if (genreData.has("genre")) 
+                    genreData.getJSONArray("genre") 
+                else 
+                    JSONArray()
+                    
+                // Traverses the feed and maps each genre
+                val genres = genreArray.mapObject { obj ->
+                    TvMediaCollection(
+                        id = obj.optString("id", "0"),
+                        title = obj.optString("title", "Unknown"),
+                        description = obj.optString("description", ""),
+                        artUri = obj.optString("image", "")?.let { if (it.isNotEmpty()) Uri.parse(it) else null },
+                        orderBy = obj.optInt("order", 0))
+                }
 
-            // Initializes an empty list to populate with metadata metadata
-            val metadatas: MutableList<TvMediaMetadata> = mutableListOf()
-
-            // Reads JSON input into a JSONArray
-            // We are using a local file, in your app you most likely will be using a remote URL
-            var genreStream = context.resources.assets.open("jio-genre-map.json")
-            var genreData = JSONObject(
-                String(genreStream.readBytes(), StandardCharsets.UTF_8)
-            )
-
-            // Traverses the feed and maps each genre
-            val genre = genreData.getJSONArray("genre")
-            val genres = genre.mapObject { obj ->
-                val collection = TvMediaCollection(
-                    id = obj.getString("id"),
-                    title = obj.getString("title"),
-                    description = obj.getString("description"),
-                    artUri = obj.getString("image")?.let { Uri.parse(it) },
-                    orderBy = obj.getInt("order"))
-                collection
+            try {
+                // Safely get the 'result' array or empty array if it doesn't exist
+                val resultArray = if (data.has("result")) data.getJSONArray("result") else JSONArray()
+                
+                // Traverses the feed and maps each collection
+                val channels = resultArray.mapObject { obj ->
+                    // Traverses the collection and map each content item metadata
+                    // Use optString/optInt for safer JSON parsing
+                    val logoUrl = obj.optString("logoUrl", "")
+                    val contentUri = if (logoUrl.isNotEmpty()) 
+                        Uri.parse(Constants.imageUrl + logoUrl) 
+                    else 
+                        Uri.EMPTY
+                        
+                    TvMediaMetadata(
+                        collectionId = obj.optString("channelCategoryId", "0"),
+                        id = obj.optString("channel_id", "0"),
+                        title = obj.optString("channel_name", "Unknown Channel"),
+                        lang = obj.optString("channelLanguageId", "1"),
+                        contentUri = contentUri,
+                        artUri = contentUri)
+                }
+    
+                // Filter channels by language
+                val myChannels = channels.filter { it.lang in listOf("1", "6", "3") }
+    
+                metadatas.addAll(myChannels)
+                return FeedParseResult(metadatas, genres)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error processing channels data", e)
+                // Return empty result if there's an error
+                return FeedParseResult(emptyList(), genres)
             }
-
-            // Traverses the feed and maps each collection
-            val channels = data.getJSONArray("result").mapObject { obj ->
-                // Traverses the collection and map each content item metadata
-                TvMediaMetadata(
-                    collectionId = obj.getString("channelCategoryId"),
-                    id = obj.getString("channel_id"),
-                    title = obj.getString("channel_name"),
-                    lang = obj.getString("channelLanguageId"),
-                    contentUri = (Constants.imageUrl + obj.getString("logoUrl"))?.let { Uri.parse(it) }!!,
-                    artUri = (Constants.imageUrl + obj.getString("logoUrl"))?.let { Uri.parse(it) })
-            }
-
-            val myChannels = channels.filter { it.lang in listOf("1", "6", "3") }
-
-            metadatas.addAll(myChannels)
-            return FeedParseResult(metadatas, genres)
+        } catch (e: Exception) {
+            Log.e(TAG, "Fatal error in parseMediaFeed", e)
+            // Return completely empty result in case of any exception
+            return FeedParseResult(emptyList(), emptyList())
+        }
         }
 
         /** Parses metadata from our assets folder and synchronizes the database */
@@ -117,44 +144,90 @@ class TvMediaSynchronizer(private val context: Context, params: WorkerParameters
             Log.d(TAG, "Starting synchronization work")
             val database = TvMediaDatabase.getInstance(context)
 
-            // Run in a blocking context since this is called from a Worker
-            runBlocking {
-                val feed = parseMediaFeed(context)
-
-            // Gets a list of the metadata IDs for comparisons
-            val metadataIdList = feed.metadata.map { it.id }
-
-
-            // Deletes items in our database that have been deleted from the metadata feed
-            // NOTE: It's important to keep the things added to the TV launcher in sync
-            database.metadata().findAll()
-                    .filter { !metadataIdList.contains(it.id) }
-                    .forEach {
-                        database.metadata().delete(it)
-                        // Removes programs no longer present from TV launcher
-                        TvLauncherUtils.removeProgram(context, it)
-                        // Removes programs no longer present from Watch Next row
-                        TvLauncherUtils.removeFromWatchNext(context, it)
+            try {
+                // Run in a blocking context since this is called from a Worker
+                runBlocking {
+                    try {
+                        val feed = parseMediaFeed(context)
+    
+                        // Skip synchronization if we have no metadata or collections
+                        if (feed.metadata.isEmpty() && feed.collections.isEmpty()) {
+                            Log.w(TAG, "No metadata or collections found, skipping synchronization")
+                            return@runBlocking
+                        }
+    
+                        // Gets a list of the metadata IDs for comparisons
+                        val metadataIdList = feed.metadata.map { it.id }
+    
+                        try {
+                            // Deletes items in our database that have been deleted from the metadata feed
+                            // NOTE: It's important to keep the things added to the TV launcher in sync
+                            database.metadata().findAll()
+                                .filter { !metadataIdList.contains(it.id) }
+                                .forEach {
+                                    try {
+                                        database.metadata().delete(it)
+                                        // Removes programs from TV launcher
+                                        TvLauncherUtils.removeProgram(context, it)
+                                        TvLauncherUtils.removeFromWatchNext(context, it)
+                                    } catch (e: Exception) {
+                                        Log.e(TAG, "Error removing metadata: ${it.id}", e)
+                                    }
+                                }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error processing metadata deletions", e)
+                        }
+                        
+                        try {
+                            database.collections().findAll()
+                                .filter { !feed.collections.contains(it) }
+                                .forEach {
+                                    try {
+                                        database.collections().delete(it)
+                                        TvLauncherUtils.removeChannel(context, it)
+                                    } catch (e: Exception) {
+                                        Log.e(TAG, "Error removing collection: ${it.id}", e)
+                                    }
+                                }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error processing collection deletions", e)
+                        }
+    
+                        // Insert new channels
+                        try {
+                            val dbChannels = database.metadata().findAll().map { it.id }
+                            feed.metadata.filter { !dbChannels.contains(it.id) }
+                                .forEach {
+                                    try {
+                                        database.metadata().insert(it)
+                                    } catch (e: Exception) {
+                                        Log.e(TAG, "Error inserting metadata: ${it.id}", e)
+                                    }
+                                }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error inserting new metadata", e)
+                        }
+    
+                        // Insert new collections
+                        try {
+                            val dbCollections = database.collections().findAll().map { it.id }
+                            feed.collections.filter { !dbCollections.contains(it.id) }
+                                .forEach {
+                                    try {
+                                        database.collections().insert(it)
+                                    } catch (e: Exception) {
+                                        Log.e(TAG, "Error inserting collection: ${it.id}", e)
+                                    }
+                                }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error inserting new collections", e)
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error in synchronization process", e)
                     }
-            database.collections().findAll()
-                    .filter { !feed.collections.contains(it) }
-                    .forEach {
-                        database.collections().delete(it)
-                        // Removes channels from TV launcher
-                        TvLauncherUtils.removeChannel(context, it)
-                    }
-
-            var dbChannels = database.metadata().findAll().map { it.id }
-            feed.metadata.filter { !dbChannels.contains(it.id) }
-                .forEach {
-                    database.metadata().insert(it)
                 }
-
-            var dbCollections = database.collections().findAll().map { it.id }
-            feed.collections.filter { !dbCollections.contains(it.id) }
-                .forEach {
-                    database.collections().insert(it)
-                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Fatal error in synchronize method", e)
             }
 
             // Upon insert, we will replace all metadata already added so we can update titles,

@@ -7,6 +7,7 @@ import com.androidnetworking.common.ANResponse
 import com.androidnetworking.common.Priority
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
 
@@ -163,20 +164,54 @@ object JioAPI {
     }
 
     suspend fun getChannels(): JSONObject = withContext(Dispatchers.IO) {
-        val request = AndroidNetworking.get(Constants.channelsURL).build()
-        val response = request.executeForJSONObject()
-        if (response.isSuccess) response.result as JSONObject else JSONObject()
+        try {
+            val request = AndroidNetworking.get(Constants.channelsURL).build()
+            val response = request.executeForJSONObject()
+            if (response.isSuccess) {
+                val result = response.result as JSONObject
+                // Ensure it has a "result" array, add an empty one if missing
+                if (!result.has("result")) {
+                    result.put("result", JSONArray())
+                }
+                result
+            } else {
+                // Create a JSON with an empty result array
+                JSONObject().apply {
+                    put("result", JSONArray())
+                }
+            }
+        } catch (e: Exception) {
+            // Fallback in case of any error
+            JSONObject().apply {
+                put("result", JSONArray())
+            }
+        }
     }
 
     suspend fun getEPG(channelId: String): JSONObject = withContext(Dispatchers.IO) {
-        val request = AndroidNetworking.get(
-            Constants.epgUrl.replace("channelId", channelId)
-        ).build()
-        val response = request.executeForJSONObject()
-        if (response.isSuccess) {
-            response.result as JSONObject
-        } else {
-            JSONObject()
+        try {
+            val request = AndroidNetworking.get(
+                Constants.epgUrl.replace("channelId", channelId)
+            ).build()
+            val response = request.executeForJSONObject()
+            if (response.isSuccess) {
+                val result = response.result as JSONObject
+                // Ensure it has an "epg" array, add an empty one if missing
+                if (!result.has("epg")) {
+                    result.put("epg", JSONArray())
+                }
+                result
+            } else {
+                // Create a JSON with an empty epg array
+                JSONObject().apply {
+                    put("epg", JSONArray())
+                }
+            }
+        } catch (e: Exception) {
+            // Fallback in case of any error
+            JSONObject().apply {
+                put("epg", JSONArray())
+            }
         }
     }
 }
