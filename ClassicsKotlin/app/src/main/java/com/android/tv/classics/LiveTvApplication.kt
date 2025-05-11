@@ -29,7 +29,7 @@ class LiveTvApplication : Application() {
         private lateinit var httpStore: HttpStore
         private lateinit var prefStore: PrefStore
         private var instance: LiveTvApplication? = null
-        private var authHeaders: Map<String, String>? = null
+        private var authHeaders: Map<String, Any>? = null
 
         fun getInstance(): LiveTvApplication {
             return instance ?: LiveTvApplication().also { instance = it }
@@ -73,14 +73,35 @@ class LiveTvApplication : Application() {
             }
         }
 
-        fun getAuthHeaders(): Map<String, String> {
+        fun getAuthHeaders(): Map<String, Any> {
             if (authHeaders == null) {
                 return prefStore.getMap("headers") ?: emptyMap()
             }
             return authHeaders ?: emptyMap()
         }
         
-        fun setAuthHeaders(newAuthHeaders: Map<String, String>) {
+        // Helper function to safely access header values as strings
+        fun getAuthHeaderString(key: String, defaultValue: String = ""): String {
+            val value = getAuthHeaders()[key]
+            return when (value) {
+                is String -> value
+                null -> defaultValue
+                else -> value.toString()
+            }
+        }
+        
+        // Helper function to get auth headers as a Map<String, String> for compatibility
+        fun getAuthHeadersAsStringMap(): Map<String, String> {
+            return getAuthHeaders().mapValues { (_, value) -> 
+                when (value) {
+                    is String -> value
+                    null -> ""
+                    else -> value.toString()
+                }
+            }
+        }
+        
+        fun setAuthHeaders(newAuthHeaders: Map<String, Any>) {
             authHeaders = newAuthHeaders
             prefStore.saveMap("headers", newAuthHeaders)
         }
@@ -92,7 +113,7 @@ class LiveTvApplication : Application() {
                     if (cloudHeaders != null) {
                         Log.d(TAG, "Login Headers found for ${getMobileNumber()}")
                         @Suppress("UNCHECKED_CAST")
-                        setAuthHeaders(cloudHeaders as Map<String, String>)
+                        setAuthHeaders(cloudHeaders as Map<String, Any>)
                         // TvLauncherUtils.refreshToken()
                     }
                 }

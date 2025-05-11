@@ -262,20 +262,29 @@ class NowPlayingFragment : VideoSupportFragment() {
 
             val hashMap = HashMap<String, String>()
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                hashMap[Constants.UNIQUE_ID] = authHeaders.getOrDefault("uniqueId", "")
-                hashMap[Constants.SSO_TOKEN] = authHeaders.getOrDefault("ssotoken", "")
-                hashMap[Constants.SUBSCRIBER_ID] = authHeaders.getOrDefault("crmid", "")
-                hashMap[Constants.DEVICE_ID] = authHeaders.getOrDefault("deviceId", "")
+                // Use the helper function to safely get string values from authHeaders
+                val getStringValue = { key: String -> 
+                    when (val value = authHeaders[key]) {
+                        is String -> value
+                        null -> ""
+                        else -> value.toString()
+                    }
+                }
+                
+                hashMap[Constants.UNIQUE_ID] = getStringValue("uniqueId")
+                hashMap[Constants.SSO_TOKEN] = getStringValue("ssotoken")
+                hashMap[Constants.SUBSCRIBER_ID] = getStringValue("crmid")
+                hashMap[Constants.DEVICE_ID] = getStringValue("deviceId")
                 hashMap[Constants.OS] = Constants.VALUES.OS
-                hashMap[Constants.USER_ID] = authHeaders.getOrDefault("userId", "")
+                hashMap[Constants.USER_ID] = getStringValue("userId")
                 hashMap[Constants.OS_VERSION] = Constants.VALUES.OS_VERSION
                 hashMap[Constants.VERSION_CODE] = Constants.VALUES.VERSION_CODE
-                hashMap[Constants.CRM_ID] = authHeaders.getOrDefault("crmid", "")
+                hashMap[Constants.CRM_ID] = getStringValue("crmid")
                 hashMap[Constants.SRNO] = metadata.id
                 hashMap[Constants.CHANNEL_ID] = metadata.id
                 hashMap[Constants.DEVICE_TYPE] = "phone"
-                hashMap[Constants.USER_GROUP] = authHeaders.getOrDefault("usergroup", "")
-                hashMap[Constants.ACCESS_TOKEN] = authHeaders.getOrDefault("authToken", "")
+                hashMap[Constants.USER_GROUP] = getStringValue("usergroup")
+                hashMap[Constants.ACCESS_TOKEN] = getStringValue("authToken")
             }
 
             val playbackCookie = JioAPI.getHeaderCookie(response.getString("result"), authHeaders)
@@ -356,8 +365,8 @@ class NowPlayingFragment : VideoSupportFragment() {
             // Updates metadata state
             metadata = args.metadata
 
-            // Refersh Token
-            LiveTvApplication.getAuthHeaders()?.let { headers ->
+            // Refresh Token
+            LiveTvApplication.getAuthHeaders().let { headers ->
                 JioAPI.refreshToken(headers)
                     .getAsJSONObject(object : JSONObjectRequestListener {
                         override fun onResponse(response: JSONObject) {

@@ -1,5 +1,6 @@
 package com.android.tv.classics.utils
 
+import android.Manifest
 import android.app.DownloadManager
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -12,6 +13,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.util.Log
+import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import com.android.tv.classics.BuildConfig
 import com.android.tv.classics.LiveTvApplication
@@ -115,13 +117,12 @@ class AppUpdateManager(private val context: Context) {
         try {
             val downloadUrl = updateInfo.downloadUrl ?: return false
             
-            // Create download directory if it doesn't exist
-            val downloadFolder = File(
-                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
-                DOWNLOAD_FOLDER
-            )
-            if (!downloadFolder.exists()) {
-                downloadFolder.mkdirs()
+            // Check if we have permission to write to external storage
+            val hasStoragePermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                context.checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) == 
+                        PackageManager.PERMISSION_GRANTED
+            } else {
+                true // Permission is granted at install time on older Android versions
             }
             
             // Create download request
@@ -131,10 +132,30 @@ class AppUpdateManager(private val context: Context) {
                 setTitle("Jasmine TV Update")
                 setDescription("Downloading version ${updateInfo.versionName}")
                 setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                setDestinationInExternalPublicDir(
-                    Environment.DIRECTORY_DOWNLOADS,
-                    "$DOWNLOAD_FOLDER/$APK_NAME"
-                )
+                
+                if (hasStoragePermission) {
+                    // Create download directory if it doesn't exist
+                    val downloadFolder = File(
+                        Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+                        DOWNLOAD_FOLDER
+                    )
+                    if (!downloadFolder.exists()) {
+                        downloadFolder.mkdirs()
+                    }
+                    
+                    // Save to public external storage
+                    setDestinationInExternalPublicDir(
+                        Environment.DIRECTORY_DOWNLOADS,
+                        "$DOWNLOAD_FOLDER/$APK_NAME"
+                    )
+                } else {
+                    // No permission, use app's private directory
+                    // This will be cleaned up when the app is uninstalled
+                    val file = File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), APK_NAME)
+                    setDestinationUri(Uri.fromFile(file))
+                    Log.d(TAG, "Using app-specific storage for download: ${file.absolutePath}")
+                }
+                
                 setMimeType(APK_MIME_TYPE)
             }
             
@@ -342,5 +363,5 @@ class AppUpdateManager(private val context: Context) {
         val updateDate: String = "",
         val forceUpdate: Boolean = false,
         val minSupportedVersion: Int = 0
-    )
+    ) : java.io.Serializable
 }

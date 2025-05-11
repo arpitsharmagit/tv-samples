@@ -57,7 +57,8 @@ class DownloadCompletedReceiver : BroadcastReceiver() {
                                         installApk(context, file)
                                     }
                                 } else {
-                                    // Last resort - construct the file path manually
+                                    // Last resort - check multiple locations
+                                    // 1. Check external public storage
                                     val downloadFolder = File(
                                         Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
                                         DOWNLOAD_FOLDER
@@ -66,7 +67,21 @@ class DownloadCompletedReceiver : BroadcastReceiver() {
                                     
                                     if (apkFile.exists()) {
                                         installApk(context, apkFile)
+                                        return
                                     }
+                                    
+                                    // 2. Check app's private external storage
+                                    val privateApkFile = File(
+                                        context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS),
+                                        APK_NAME
+                                    )
+                                    
+                                    if (privateApkFile.exists()) {
+                                        installApk(context, privateApkFile)
+                                        return
+                                    }
+                                    
+                                    Log.e(TAG, "Could not find the downloaded APK file")
                                 }
                             }
                         }

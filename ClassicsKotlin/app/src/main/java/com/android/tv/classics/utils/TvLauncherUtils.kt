@@ -402,44 +402,44 @@ class TvLauncherUtils private constructor() {
             }
         }
 
-         suspend fun refreshToken() = withContext(Dispatchers.IO) {
-            LiveTvApplication.getAuthHeaders().let { headers ->
-                try {
-                    val request = JioAPI.refreshToken(headers)
-                    val response = withContext(Dispatchers.IO) {
-                        suspendCancellableCoroutine<JSONObject> { continuation ->
-                            request.getAsJSONObject(object : JSONObjectRequestListener {
-                                override fun onResponse(response: JSONObject) {
-                                    if (continuation.isActive) {
-                                        continuation.resume(response)
+        suspend fun refreshToken() = withContext(Dispatchers.IO) {
+            val headers = LiveTvApplication.getAuthHeaders()
+            try {
+                val request = JioAPI.refreshToken(headers)
+                val response = withContext(Dispatchers.IO) {
+                    suspendCancellableCoroutine<JSONObject> { continuation ->
+                        request.getAsJSONObject(object : JSONObjectRequestListener {
+                            override fun onResponse(response: JSONObject) {
+                                if (continuation.isActive) {
+                                    if (response.has("authToken")) {
+                                        val updatedHeaders = headers.toMutableMap()
+                                        updatedHeaders["authToken"] = response.getString("authToken")
+                                        LiveTvApplication.setAuthHeaders(updatedHeaders)
+                                        Log.d(TAG,"Refreshed Token ["+ response.getString("authToken")+ "] and updated ["+ LiveTvApplication.getAuthHeaders()["authToken"] +"]")
+                                    } else {
+                                        Log.d(TAG, "No auth token in response")
                                     }
+                                    continuation.resume(response)
                                 }
-                                
-                                override fun onError(error: ANError) {
-                                    if (continuation.isActive) {
-                                        Log.e(TAG, "Unable to Refresh Token.", error.cause)
-                                        continuation.resume(JSONObject())
-                                    }
-                                }
-                            })
-                            
-                            continuation.invokeOnCancellation {
-                                request.cancel(true)
                             }
+                            
+                            override fun onError(error: ANError) {
+                                if (continuation.isActive) {
+                                    Log.e(TAG, "Unable to Refresh Token.", error.cause)
+                                    continuation.resume(JSONObject())
+                                }
+                            }
+                        })
+                        
+                        continuation.invokeOnCancellation {
+                            request.cancel(true)
                         }
                     }
-                    
-                    if (response.has("authToken")) {
-                        val updatedHeaders = headers.toMutableMap()
-                        updatedHeaders["authToken"] = response.getString("authToken")
-                        LiveTvApplication.setAuthHeaders(updatedHeaders)
-                        Log.d(TAG,"Refreshed Token ["+ response.getString("authToken")+ "] and updated ["+ LiveTvApplication.getAuthHeaders()["authToken"] +"]")
-                    } else {
-                        Log.d(TAG, "No auth token in response")
-                    }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error refreshing token", e)
                 }
+                
+
+            } catch (e: Exception) {
+                Log.e(TAG, "Error refreshing token", e)
             }
         }
 
@@ -464,7 +464,7 @@ class TvLauncherUtils private constructor() {
             JioAPI.verifyOTP(mobileNumber, otp).getAsJSONObject(object:JSONObjectRequestListener{
                 override fun onResponse(response: JSONObject?) {
                     response?.let {
-                        val headers: MutableMap<String, String> = mutableMapOf()
+                        val headers: MutableMap<String, Any> = mutableMapOf()
                         val userDetails = it.getJSONObject("sessionAttributes").getJSONObject("user")
 
                         headers[Constants.AUTH_TOKEN] = it.getString("authToken")
@@ -493,6 +493,5 @@ class TvLauncherUtils private constructor() {
                 }
             })
         }
-
     }
 }

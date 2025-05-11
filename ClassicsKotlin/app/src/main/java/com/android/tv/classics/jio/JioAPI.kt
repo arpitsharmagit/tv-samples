@@ -14,7 +14,7 @@ import org.json.JSONObject
 object JioAPI {
     private val BASE_HEADERS = mapOf(
         Constants.APP_NAME to Constants.VALUES.APP_NAME,
-        Constants.DEVICE_TYPE to Constants.VALUES.DEVICE_ID,
+        Constants.DEVICE_TYPE to Constants.VALUES.DEVICE_TYPE,
         Constants.OS to Constants.VALUES.OS
     )
 
@@ -69,10 +69,16 @@ object JioAPI {
             .build()
     }
 
-    fun refreshToken(authHeaders: Map<String, String>): ANRequest<*> {
+    fun refreshToken(authHeaders: Map<String, Any>): ANRequest<*> {
+        // Extract values safely
+        val authToken = getStringValue(authHeaders, "authToken")
+        val uniqueId = getStringValue(authHeaders, "uniqueId")
+        val deviceId = getStringValue(authHeaders, "deviceId")
+        val refreshToken = getStringValue(authHeaders, "refreshToken")
+        
         val additionalHeaders = hashMapOf(
-            Constants.ACCESS_TOKEN to (authHeaders["authToken"] ?: ""),
-            Constants.UNIQUE_ID to (authHeaders["uniqueId"] ?: ""),
+            Constants.ACCESS_TOKEN to authToken,
+            Constants.UNIQUE_ID to uniqueId,
             Constants.VERSION_CODE to Constants.VALUES.VERSION_CODE
         )
         val headers = createHeaders(additionalHeaders)
@@ -80,8 +86,8 @@ object JioAPI {
         val jsonObject = JSONObject()
         try {
             jsonObject.put(Constants.APP_NAME, "RJIL_JioTV")
-            jsonObject.put(Constants.DEVICE_ID, authHeaders["deviceId"] ?: "")
-            jsonObject.put(Constants.REFRESH_TOKEN, authHeaders["refreshToken"] ?: "")
+            jsonObject.put(Constants.DEVICE_ID, deviceId)
+            jsonObject.put(Constants.REFRESH_TOKEN, refreshToken)
         } catch (e: JSONException) {
             e.printStackTrace()
         }
@@ -92,18 +98,28 @@ object JioAPI {
             .setPriority(Priority.MEDIUM)
             .build()
     }
+    
+    // Helper function to safely extract string values
+    private fun getStringValue(map: Map<String, Any>, key: String): String {
+        val value = map[key]
+        return when (value) {
+            is String -> value
+            null -> ""
+            else -> value.toString()
+        }
+    }
 
-    suspend fun getHeaderCookie(playbackUrl: String, authHeaders: Map<String, String>): String = withContext(Dispatchers.IO) {
+    suspend fun getHeaderCookie(playbackUrl: String, authHeaders: Map<String, Any>): String = withContext(Dispatchers.IO) {
         val additionalHeaders = hashMapOf(
-            Constants.ACCESS_TOKEN to (authHeaders["authToken"] ?: ""),
-            Constants.APP_KEY to (authHeaders["appkey"] ?: ""),
-            Constants.CRM_ID to (authHeaders["crmid"] ?: ""),
-            Constants.DEVICE_ID to (authHeaders["deviceId"] ?: ""),
-            Constants.SESSIONID to (authHeaders["uniqueId"] ?: ""),
-            Constants.SUBSCRIBER_ID to (authHeaders["crmid"] ?: ""),
-            Constants.UNIQUE_ID to (authHeaders["uniqueId"] ?: ""),
-            Constants.USER_GROUP to (authHeaders["usergroup"] ?: ""),
-            Constants.USER_ID to (authHeaders["userId"] ?: ""),
+            Constants.ACCESS_TOKEN to getStringValue(authHeaders, "authToken"),
+            Constants.APP_KEY to getStringValue(authHeaders, "appkey"),
+            Constants.CRM_ID to getStringValue(authHeaders, "crmid"),
+            Constants.DEVICE_ID to getStringValue(authHeaders, "deviceId"),
+            Constants.SESSIONID to getStringValue(authHeaders, "uniqueId"),
+            Constants.SUBSCRIBER_ID to getStringValue(authHeaders, "crmid"),
+            Constants.UNIQUE_ID to getStringValue(authHeaders, "uniqueId"),
+            Constants.USER_GROUP to getStringValue(authHeaders, "usergroup"),
+            Constants.USER_ID to getStringValue(authHeaders, "userId"),
             Constants.VERSION_CODE to Constants.VALUES.VERSION_CODE,
             Constants.DM to Constants.VALUES.DM,
             Constants.OTT_USER to "false",
@@ -127,18 +143,18 @@ object JioAPI {
         }
     }
 
-    suspend fun getPlaybackUrl(body: Map<String, String>, authHeaders: Map<String, String>): JSONObject = withContext(Dispatchers.IO) {
+    suspend fun getPlaybackUrl(body: Map<String, String>, authHeaders: Map<String, Any>): JSONObject = withContext(Dispatchers.IO) {
         val additionalHeaders = hashMapOf(
-            Constants.ACCESS_TOKEN to (authHeaders["authToken"] ?: ""),
-            Constants.APP_KEY to (authHeaders["appkey"] ?: ""),
+            Constants.ACCESS_TOKEN to getStringValue(authHeaders, "authToken"),
+            Constants.APP_KEY to getStringValue(authHeaders, "appkey"),
             Constants.CHANNEL_ID to (body["channel_id"] ?: ""),
-            Constants.CRM_ID to (authHeaders["crmid"] ?: ""),
-            Constants.DEVICE_ID to (authHeaders["deviceId"] ?: ""),
-            Constants.SESSIONID to (authHeaders["uniqueId"] ?: ""),
-            Constants.SUBSCRIBER_ID to (authHeaders["crmid"] ?: ""),
-            Constants.UNIQUE_ID to (authHeaders["uniqueId"] ?: ""),
-            Constants.USER_GROUP to (authHeaders["usergroup"] ?: ""),
-            Constants.USER_ID to (authHeaders["userId"] ?: ""),
+            Constants.CRM_ID to getStringValue(authHeaders, "crmid"),
+            Constants.DEVICE_ID to getStringValue(authHeaders, "deviceId"),
+            Constants.SESSIONID to getStringValue(authHeaders, "uniqueId"),
+            Constants.SUBSCRIBER_ID to getStringValue(authHeaders, "crmid"),
+            Constants.UNIQUE_ID to getStringValue(authHeaders, "uniqueId"),
+            Constants.USER_GROUP to getStringValue(authHeaders, "usergroup"),
+            Constants.USER_ID to getStringValue(authHeaders, "userId"),
             Constants.VERSION_CODE to Constants.VALUES.VERSION_CODE,
             Constants.DM to Constants.VALUES.DM,
             Constants.OTT_USER to "false",

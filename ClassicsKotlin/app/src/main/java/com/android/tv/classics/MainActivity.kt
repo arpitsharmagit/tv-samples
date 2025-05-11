@@ -17,14 +17,19 @@
 package com.android.tv.classics
 
 import android.content.Intent
+import android.Manifest
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.WindowManager
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.navigation.Navigation
 import com.android.tv.classics.databinding.ActivityMainBinding
-import com.android.tv.classics.fragments.UpdateDialogFragment
+import com.android.tv.classics.fragments.LeanbackUpdateDialogFragment
 import com.android.tv.classics.models.TvMediaDatabase
 import com.android.tv.classics.utils.AppUpdateManager
 import com.android.tv.classics.utils.TvLauncherUtils
@@ -40,6 +45,7 @@ import com.android.tv.classics.utils.FocusManager
 class MainActivity : FragmentActivity() {
     companion object {
         private val TAG = MainActivity::class.java.simpleName
+        private const val PERMISSION_REQUEST_CODE = 100
     }
 
     private lateinit var binding: ActivityMainBinding
@@ -56,12 +62,15 @@ class MainActivity : FragmentActivity() {
         setContentView(binding.root)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         
+        // Check and request permissions
+        requestRequiredPermissions()
+        
         // Initialize update manager
         appUpdateManager = AppUpdateManager(this)
         appUpdateManager.initialize()
         
         // Check for updates
-//         checkForAppUpdates()
+        // checkForAppUpdates()
 
         handleIntent(intent)
 
@@ -73,6 +82,63 @@ class MainActivity : FragmentActivity() {
 //                                .setRequiredNetworkType(NetworkType.CONNECTED)
 //                                .build())
 //                        .build())
+    }
+    
+    /**
+     * Request storage permissions required for app update functionality
+     */
+    private fun requestRequiredPermissions() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val permissions = arrayOf(
+                Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                Manifest.permission.READ_EXTERNAL_STORAGE
+            )
+            
+            val hasWritePermission = ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.WRITE_EXTERNAL_STORAGE
+            ) == PackageManager.PERMISSION_GRANTED
+            
+            val hasReadPermission = ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.READ_EXTERNAL_STORAGE
+            ) == PackageManager.PERMISSION_GRANTED
+            
+            if (!hasWritePermission || !hasReadPermission) {
+                ActivityCompat.requestPermissions(
+                    this,
+                    permissions,
+                    PERMISSION_REQUEST_CODE
+                )
+            }
+        }
+    }
+    
+    /**
+     * Handle permission request results
+     */
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        
+        if (requestCode == PERMISSION_REQUEST_CODE) {
+            // Check if all permissions were granted
+            var allGranted = true
+            for (result in grantResults) {
+                if (result != PackageManager.PERMISSION_GRANTED) {
+                    allGranted = false
+                    break
+                }
+            }
+            
+            if (!allGranted) {
+                Log.w(TAG, "Storage permissions not granted - updates may not work properly")
+                LiveTvApplication.showToast("Storage permissions required for app updates")
+            }
+        }
     }
     
     override fun onNewIntent(intent: Intent) {
@@ -140,16 +206,29 @@ class MainActivity : FragmentActivity() {
      * Check for app updates from the remote server
      */
     private fun checkForAppUpdates() {
+        // Start the update check with a slight delay to allow the UI to initialize
         lifecycleScope.launch {
+            // Short delay before checking for updates to avoid UI conflicts
+            withContext(Dispatchers.IO) {
+                kotlinx.coroutines.delay(2000) // 2 second delay to let the main UI settle
+            }
+            
             try {
                 val updateInfo = appUpdateManager.checkForUpdates()
                 
                 if (updateInfo.isUpdateAvailable) {
                     Log.d(TAG, "Update available: ${updateInfo.versionName}")
                     
-                    // Show update dialog to the user
-                    val updateDialog = UpdateDialogFragment.newInstance(updateInfo)
-                    updateDialog.show(supportFragmentManager, UpdateDialogFragment.TAG)
+                    // Make sure we're on the main thread
+                    withContext(Dispatchers.Main) {
+                        // Ensure the activity is still active before showing the dialog
+                        if (!isFinishing && !isDestroyed) {
+                            // Show update dialog to the user using Leanback GuidedStepFragment
+                            LeanbackUpdateDialogFragment.show(this@MainActivity, updateInfo)
+                        } else {
+                            Log.d(TAG, "Activity no longer active, skipping update dialog")
+                        }
+                    }
                 } else {
                     Log.d(TAG, "No updates available")
                 }

@@ -1,16 +1,27 @@
 package com.android.tv.classics.fragments
 
+import android.app.Dialog
+import android.graphics.Color
+import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.util.Log
+import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.Window
 import android.widget.Button
+import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.fragment.app.DialogFragment
+import android.widget.FrameLayout
 import androidx.lifecycle.lifecycleScope
 import com.android.tv.classics.R
 import com.android.tv.classics.utils.AppUpdateManager
+import com.android.tv.classics.utils.FocusManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -20,10 +31,11 @@ import kotlinx.coroutines.withContext
 
 /**
  * Dialog fragment to show app update information and controls
+ * This uses Leanback UI components optimized for TV navigation
  */
 class UpdateDialogFragment : DialogFragment() {
     private lateinit var appUpdateManager: AppUpdateManager
-    private lateinit var updateInfo: AppUpdateManager.UpdateInfo
+    private var updateInfo: AppUpdateManager.UpdateInfo = AppUpdateManager.UpdateInfo(false)
     
     private lateinit var titleTextView: TextView
     private lateinit var messageTextView: TextView
@@ -33,17 +45,39 @@ class UpdateDialogFragment : DialogFragment() {
     private lateinit var progressTextView: TextView
     private lateinit var updateButton: Button
     private lateinit var cancelButton: Button
+    private lateinit var buttonContainer: ViewGroup
+    private lateinit var containerView: FrameLayout
     
     private var progressJob: Job? = null
     private var isDownloading = false
+    private val mainHandler = Handler(Looper.getMainLooper())
     
     companion object {
         const val TAG = "UpdateDialogFragment"
         
         fun newInstance(updateInfo: AppUpdateManager.UpdateInfo): UpdateDialogFragment {
             val fragment = UpdateDialogFragment()
-            fragment.updateInfo = updateInfo
+            val args = Bundle()
+            args.putSerializable("update_info", updateInfo)
+            fragment.arguments = args
             return fragment
+        }
+        
+        /**
+         * Safely show the update dialog
+         * @param fragmentManager The FragmentManager to use
+         * @param dialog The dialog fragment to show
+         */
+        fun show(fragmentManager: androidx.fragment.app.FragmentManager, dialog: UpdateDialogFragment) {
+            try {
+                // Use the commitAllowingStateLoss to prevent IllegalStateException
+                // when showing dialog after an activity state change
+                val transaction = fragmentManager.beginTransaction()
+                transaction.add(dialog, TAG)
+                transaction.commitAllowingStateLoss()
+            } catch (e: Exception) {
+                Log.e(TAG, "Error showing update dialog", e)
+            }
         }
     }
     
@@ -51,8 +85,28 @@ class UpdateDialogFragment : DialogFragment() {
         super.onCreate(savedInstanceState)
         appUpdateManager = AppUpdateManager(requireContext())
         
-        // Use a custom style for the dialog
-        setStyle(STYLE_NO_TITLE, R.style.AppTheme_Dialog)
+        arguments?.getSerializable("update_info")?.let {
+            updateInfo = it as AppUpdateManager.UpdateInfo
+        }
+        
+        // Use a custom style for better TV experience
+        setStyle(STYLE_NO_FRAME, R.style.AppTheme_Dialog)
+    }
+    
+    override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
+        val dialog = super.onCreateDialog(savedInstanceState)
+        
+        // Set up dialog properties for better performance
+        dialog.window?.apply {
+            requestFeature(Window.FEATURE_NO_TITLE)
+            setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+            // This prevents full screen takeover which can cause hanging
+            setLayout(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        }
+        
+        // Ensure dialog doesn't steal all input focus
+        dialog.setCanceledOnTouchOutside(true)
+        return dialog
     }
     
     override fun onCreateView(
@@ -67,6 +121,8 @@ class UpdateDialogFragment : DialogFragment() {
         super.onViewCreated(view, savedInstanceState)
         
         // Initialize views
+        containerView = view as FrameLayout
+        
         titleTextView = view.findViewById(R.id.update_title)
         messageTextView = view.findViewById(R.id.update_message)
         versionTextView = view.findViewById(R.id.update_version)
@@ -75,6 +131,10 @@ class UpdateDialogFragment : DialogFragment() {
         progressTextView = view.findViewById(R.id.update_progress_text)
         updateButton = view.findViewById(R.id.update_button)
         cancelButton = view.findViewById(R.id.cancel_button)
+        buttonContainer = view.findViewById(R.id.button_container)
+        
+        // Configure container for better TV UX
+        setupContainerView()
         
         // Set up UI with update info
         setupUi()
@@ -109,6 +169,66 @@ class UpdateDialogFragment : DialogFragment() {
         if (updateInfo.forceUpdate) {
             cancelButton.visibility = View.GONE
         }
+        
+        // Enhanced focus handling for TV
+        setupEnhancedNavigation()
+    }
+    
+    private fun setupContainerView() {
+        // Configure container view for better Android TV focus behavior
+        containerView.apply {
+            // Prevent accidental overshoot of focus
+            descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
+            // Give haptic feedback for focus changes
+            isFocusable = true
+            isFocusableInTouchMode = true
+        }
+    }
+    
+    private fun setupEnhancedNavigation() {
+        // Set initial focus with slight delay to ensure view is fully laid out
+        mainHandler.postDelayed({
+            if (isAdded && !isRemoving) {
+                updateButton.requestFocus()
+            }
+        }, 100)
+        
+        // Intercept key events at the dialog level for better control
+        dialog?.setOnKeyListener { _, keyCode, event ->
+            if (event.action == KeyEvent.ACTION_DOWN) {
+                when (keyCode) {
+                    KeyEvent.KEYCODE_DPAD_LEFT -> {
+                        if (updateButton.hasFocus() && cancelButton.visibility == View.VISIBLE) {
+                            cancelButton.requestFocus()
+                            return@setOnKeyListener true
+                        }
+                    }
+                    KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                        if (cancelButton.hasFocus()) {
+                            updateButton.requestFocus()
+                            return@setOnKeyListener true
+                        }
+                    }
+                    KeyEvent.KEYCODE_BACK -> {
+                        if (!updateInfo.forceUpdate) {
+                            dismiss()
+                            return@setOnKeyListener true
+                        }
+                    }
+                    KeyEvent.KEYCODE_ESCAPE -> {
+                        if (!updateInfo.forceUpdate) {
+                            dismiss()
+                            return@setOnKeyListener true
+                        }
+                    }
+                }
+            }
+            false
+        }
+        
+        // Set proper focus traversal
+        updateButton.nextFocusLeftId = R.id.cancel_button
+        cancelButton.nextFocusRightId = R.id.update_button
     }
     
     private fun setupUi() {
@@ -126,6 +246,10 @@ class UpdateDialogFragment : DialogFragment() {
         // Hide progress initially
         progressBar.visibility = View.GONE
         progressTextView.visibility = View.GONE
+        
+        // Ensure buttons have proper focus states for TV
+        FocusManager.setupButtonForTv(updateButton)
+        FocusManager.setupButtonForTv(cancelButton)
     }
     
     private fun startDownload() {
@@ -162,6 +286,8 @@ class UpdateDialogFragment : DialogFragment() {
                 val progress = appUpdateManager.getDownloadProgress()
                 
                 withContext(Dispatchers.Main) {
+                    if (!isAdded) return@withContext
+                    
                     if (progress >= 0) {
                         progressBar.progress = progress
                         progressTextView.text = "Downloading: $progress%"
@@ -178,8 +304,17 @@ class UpdateDialogFragment : DialogFragment() {
         progressJob = null
     }
     
+    override fun onPause() {
+        super.onPause()
+        // Ensure we don't continue UI updates if fragment is no longer visible
+        if (!isDownloading) {
+            stopProgressTracking()
+        }
+    }
+    
     override fun onDestroy() {
         super.onDestroy()
+        mainHandler.removeCallbacksAndMessages(null)
         stopProgressTracking()
     }
 }

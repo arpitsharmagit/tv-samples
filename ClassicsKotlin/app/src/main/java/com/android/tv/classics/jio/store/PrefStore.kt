@@ -11,7 +11,7 @@ class PrefStore(private val context: Context) {
     private val sharedPref: SharedPreferences = context.getSharedPreferences(Constants.preferenceFile, Context.MODE_PRIVATE)
     private val objectMapper: ObjectMapper = ObjectMapper()
 
-    fun saveMap(key: String, inputMap: Map<String, String>) {
+    fun saveMap(key: String, inputMap: Map<String, Any>) {
         try {
             val jsonString = objectMapper.writeValueAsString(inputMap)
             saveData(key, jsonString)
@@ -20,11 +20,11 @@ class PrefStore(private val context: Context) {
         }
     }
 
-    fun getMap(key: String): Map<String, String>? {
+    fun getMap(key: String): Map<String, Any>? {
         try {
             val jsonString = sharedPref.getString(key, JSONObject().toString())
-            // Use TypeReference to specify the Map type
-            return objectMapper.readValue(jsonString, object : TypeReference<Map<String, String>>() {})
+            // Use TypeReference to specify the Map type with Any to handle complex objects
+            return objectMapper.readValue(jsonString, object : TypeReference<Map<String, Any>>() {})
         } catch (e: Exception) {
             e.printStackTrace()
         }
