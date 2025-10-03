@@ -33,8 +33,6 @@ import com.android.tv.classics.fragments.LeanbackUpdateDialogFragment
 import com.android.tv.classics.models.TvMediaDatabase
 import com.android.tv.classics.utils.AppUpdateManager
 import com.android.tv.classics.utils.TvLauncherUtils
-import com.androidnetworking.AndroidNetworking
-import com.androidnetworking.interceptors.HttpLoggingInterceptor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -53,10 +51,6 @@ class MainActivity : FragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        AndroidNetworking.initialize(applicationContext)
-        AndroidNetworking.enableLogging() // simply enable logging
-        AndroidNetworking.enableLogging(HttpLoggingInterceptor.Level.BODY) // enabling logging with level
 
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)

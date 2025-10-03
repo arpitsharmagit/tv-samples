@@ -23,6 +23,14 @@ apply plugin: 'com.google.gms.google-services'
 apply plugin: 'com.google.firebase.crashlytics'
 
 android {
+    signingConfigs {
+        debug {
+            storeFile file('/home/arpit/AndroidTVDevelop/JioTV/andoidtv.jks')
+            storePassword '123456'
+            keyAlias 'key'
+            keyPassword '123456'
+        }
+    }
     compileSdkVersion 29
 
     defaultConfig {

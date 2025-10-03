@@ -9,13 +9,11 @@ import androidx.lifecycle.LifecycleCoroutineScope
 import com.android.tv.classics.jio.store.HttpStore
 import com.android.tv.classics.jio.store.PrefStore
 import com.android.tv.classics.utils.FirebaseAuthManager
-import com.android.tv.classics.utils.HttpLoggingManager
 import com.android.tv.classics.utils.TvLauncherUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import com.androidnetworking.AndroidNetworking
-import com.androidnetworking.interceptors.HttpLoggingInterceptor
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.DatabaseReference
@@ -29,6 +27,7 @@ class LiveTvApplication : Application() {
         private lateinit var httpStore: HttpStore
         private lateinit var prefStore: PrefStore
         private var instance: LiveTvApplication? = null
+
         private var authHeaders: Map<String, Any>? = null
 
         fun getInstance(): LiveTvApplication {
@@ -131,7 +130,7 @@ class LiveTvApplication : Application() {
         bootstrapApplication()
     }
 
-    fun bootstrapApplication() {
+    private fun bootstrapApplication() {
         // start prefstore
         prefStore = PrefStore(getInstance())
         httpStore = HttpStore(getInstance())

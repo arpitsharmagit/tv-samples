@@ -19,7 +19,7 @@ class CustomLoggingInterceptor : Interceptor {
         val request = chain.request()
 
         // Log Request Details
-        logRequest(request)
+        logCurlRequest(request)
 
         // Proceed with the request
         var response = chain.proceed(request)
@@ -53,10 +53,45 @@ class CustomLoggingInterceptor : Interceptor {
         }
     }
 
+    private fun logCurlRequest(request: Request) {
+        try {
+            val curlCmd = StringBuilder("curl")
+            
+            // Add method if not GET
+            if (request.method != "GET") {
+                curlCmd.append(" -X ${request.method}")
+            }
+            
+            // Add headers
+            for (name in request.headers.names()) {
+                curlCmd.append(" -H '${name}: ${request.headers[name]}'")
+            }
+            
+            // Add body
+            request.body?.let {
+                val buffer = Buffer()
+                it.writeTo(buffer)
+                val bodyString = buffer.readUtf8()
+                if (bodyString.isNotEmpty()) {
+                    curlCmd.append(" -d '${bodyString.replace("'", "\\'")}'")
+                }
+            }
+            
+            // Add URL
+            curlCmd.append(" '${request.url}'")
+            
+            Log.d(TAG, "cURL command: $curlCmd")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error creating cURL command", e)
+        }
+    }
+
     private fun logResponse(response: Response): Response {
+        if (response.code == 200){
+            return response
+        }
         Log.d(TAG, "Response URL: ${response.request.url}")
         Log.d(TAG, "Response Code: ${response.code}")
-
         // Log Headers
         for (name in response.headers.names()) {
             Log.d(TAG, "Response Header: $name = ${response.headers[name]}")

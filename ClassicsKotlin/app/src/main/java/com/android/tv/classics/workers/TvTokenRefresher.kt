@@ -5,9 +5,6 @@ import android.util.Log
 import androidx.work.Worker
 import androidx.work.WorkerParameters
 import com.android.tv.classics.utils.TvLauncherUtils
-import com.androidnetworking.AndroidNetworking
-import com.androidnetworking.interceptors.HttpLoggingInterceptor
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 
 /** Worker that refresh api token */
@@ -15,14 +12,7 @@ class TvTokenRefresher(private val context: Context, params: WorkerParameters) :
         Worker(context, params) {
 
     override fun doWork(): Result = try {
-        AndroidNetworking.initialize(context)
-         // AndroidNetworking.enableLogging() // simply enable logging
-
-//        AndroidNetworking.enableLogging(HttpLoggingInterceptor.Level.BODY) // enabling logging with level
-
-
         synchronize(context)
-
         Result.success()
     } catch (exc: Exception) {
         Result.failure()

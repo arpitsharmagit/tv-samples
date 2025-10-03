@@ -36,16 +36,16 @@ class Constants {
         const val VERSION_CODE = "versionCode"
 
         const val otpURL = "https://jiotvapi.media.jio.com/userservice/apis/v1/loginotp/send"
-        const val verifyURL = "https://jiotvapi.media.jio.com/userservice/apis/v1/loginotp/verify"
-        const val refreshTokenURL = "https://auth.media.jio.com/tokenservice/apis/v1/refreshtoken?langId=6"
+        const val verifyURL = "https://jiotvapi.media.jio.com/userservice/apis/v2/loginotp/verify"
+        const val refreshTokenURL = "https://auth.media.jio.com/tokenservice/apis/v2/refreshtoken?langId=6"
         const val channelURL = "https://jiotvapi.media.jio.com/playback/apis/v1.1/geturl?langId=6"
-        const val channelsURL = "https://jiotvapi.cdn.jio.com/apis/v3.0/getMobileChannelList/get/?langId=6&os=android&devicetype=phone&usertype=JIO&version=330&langId=6"
+        const val channelsURL = "https://jiotvapi.cdn.jio.com/apis/v3.1/getMobileChannelList/get/?langId=6&os=android&devicetype=tv&usertype=JIO&version=396"
         const val imageUrl = "https://jiotv.catchup.cdn.jio.com/dare_images/images/"
         const val epgUrl = "https://jiotvapi.cdn.jio.com/apis/v1.3/getepg/get?offset=0&channel_id=channelId&langId=6";
     }
 
     object VALUES {
-        const val VERSION_CODE = "377"
+        const val VERSION_CODE = "396"
         const val VERSION_NAME = "7.1.7"
         const val OS = "android"
         const val DM = "OnePlus HD1911"

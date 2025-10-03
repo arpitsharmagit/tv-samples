@@ -38,13 +38,8 @@ class HttpStore(context: Context) {
         fun getHttpClient(): OkHttpClient {
             val builder = OkHttpClient.Builder()
             if (isLoggingEnabled) {
-                // Commented out logging interceptors
-                // builder.addInterceptor(new CustomLoggingInterceptor());
-                // builder.addNetworkInterceptor(new CustomLoggingInterceptor());
-                // HttpLoggingInterceptor httpLoggingInterceptor = new HttpLoggingInterceptor();
-                // httpLoggingInterceptor.setLevel(HttpLoggingInterceptor.Level.BODY);
-                // builder.addInterceptor(httpLoggingInterceptor);
-                // builder.addNetworkInterceptor(httpLoggingInterceptor);
+                // Add custom logging interceptor for request/response and cURL formatting
+                builder.addInterceptor(CustomLoggingInterceptor())
             }
 
             val protocols = ArrayList<Protocol>().apply {

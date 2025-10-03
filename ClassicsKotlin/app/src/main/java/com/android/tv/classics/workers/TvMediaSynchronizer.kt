@@ -25,8 +25,6 @@ import com.android.tv.classics.jio.Constants
 import com.android.tv.classics.jio.JioAPI
 import com.android.tv.classics.models.*
 import com.android.tv.classics.utils.TvLauncherUtils
-import com.androidnetworking.AndroidNetworking
-import com.androidnetworking.interceptors.HttpLoggingInterceptor
 import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONObject
@@ -50,9 +48,6 @@ class TvMediaSynchronizer(private val context: Context, params: WorkerParameters
             val collections: List<TvMediaCollection>)
 
     override fun doWork(): Result = try {
-        AndroidNetworking.initialize(context)
-         // AndroidNetworking.enableLogging() // simply enable logging
-//        AndroidNetworking.enableLogging(HttpLoggingInterceptor.Level.BODY) // enabling logging with level
         synchronize(context)
         Result.success()
     } catch (exc: Exception) {
