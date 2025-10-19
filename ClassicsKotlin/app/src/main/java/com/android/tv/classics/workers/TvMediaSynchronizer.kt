@@ -28,6 +28,7 @@ import com.android.tv.classics.utils.TvLauncherUtils
 import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONObject
+import timber.log.Timber
 import java.nio.charset.StandardCharsets
 
 /** Maps a JSONArray of strings */
@@ -71,7 +72,7 @@ class TvMediaSynchronizer(private val context: Context, params: WorkerParameters
                     val genreStream = context.resources.assets.open("jio-genre-map.json")
                     JSONObject(String(genreStream.readBytes(), StandardCharsets.UTF_8))
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error reading genre data", e)
+                    Timber.e( "Error reading genre data", e)
                     // Provide fallback data if file can't be read
                     JSONObject().apply { 
                         put("genre", JSONArray())
@@ -123,12 +124,12 @@ class TvMediaSynchronizer(private val context: Context, params: WorkerParameters
                 metadatas.addAll(myChannels)
                 return FeedParseResult(metadatas, genres)
             } catch (e: Exception) {
-                Log.e(TAG, "Error processing channels data", e)
+                Timber.e( "Error processing channels data", e)
                 // Return empty result if there's an error
                 return FeedParseResult(emptyList(), genres)
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Fatal error in parseMediaFeed", e)
+            Timber.e( "Fatal error in parseMediaFeed", e)
             // Return completely empty result in case of any exception
             return FeedParseResult(emptyList(), emptyList())
         }
@@ -136,7 +137,7 @@ class TvMediaSynchronizer(private val context: Context, params: WorkerParameters
 
         /** Parses metadata from our assets folder and synchronizes the database */
         @Synchronized fun synchronize(context: Context) {
-            Log.d(TAG, "Starting synchronization work")
+            Timber.d("Starting synchronization work")
             val database = TvMediaDatabase.getInstance(context)
 
             try {
@@ -147,7 +148,7 @@ class TvMediaSynchronizer(private val context: Context, params: WorkerParameters
     
                         // Skip synchronization if we have no metadata or collections
                         if (feed.metadata.isEmpty() && feed.collections.isEmpty()) {
-                            Log.w(TAG, "No metadata or collections found, skipping synchronization")
+                            Timber.w( "No metadata or collections found, skipping synchronization")
                             return@runBlocking
                         }
     
@@ -166,11 +167,11 @@ class TvMediaSynchronizer(private val context: Context, params: WorkerParameters
                                         TvLauncherUtils.removeProgram(context, it)
                                         TvLauncherUtils.removeFromWatchNext(context, it)
                                     } catch (e: Exception) {
-                                        Log.e(TAG, "Error removing metadata: ${it.id}", e)
+                                        Timber.e( "Error removing metadata: ${it.id}", e)
                                     }
                                 }
                         } catch (e: Exception) {
-                            Log.e(TAG, "Error processing metadata deletions", e)
+                            Timber.e( "Error processing metadata deletions", e)
                         }
                         
                         try {
@@ -181,11 +182,11 @@ class TvMediaSynchronizer(private val context: Context, params: WorkerParameters
                                         database.collections().delete(it)
                                         TvLauncherUtils.removeChannel(context, it)
                                     } catch (e: Exception) {
-                                        Log.e(TAG, "Error removing collection: ${it.id}", e)
+                                        Timber.e( "Error removing collection: ${it.id}", e)
                                     }
                                 }
                         } catch (e: Exception) {
-                            Log.e(TAG, "Error processing collection deletions", e)
+                            Timber.e( "Error processing collection deletions", e)
                         }
     
                         // Insert new channels
@@ -196,11 +197,11 @@ class TvMediaSynchronizer(private val context: Context, params: WorkerParameters
                                     try {
                                         database.metadata().insert(it)
                                     } catch (e: Exception) {
-                                        Log.e(TAG, "Error inserting metadata: ${it.id}", e)
+                                        Timber.e( "Error inserting metadata: ${it.id}", e)
                                     }
                                 }
                         } catch (e: Exception) {
-                            Log.e(TAG, "Error inserting new metadata", e)
+                            Timber.e( "Error inserting new metadata", e)
                         }
     
                         // Insert new collections
@@ -211,18 +212,18 @@ class TvMediaSynchronizer(private val context: Context, params: WorkerParameters
                                     try {
                                         database.collections().insert(it)
                                     } catch (e: Exception) {
-                                        Log.e(TAG, "Error inserting collection: ${it.id}", e)
+                                        Timber.e( "Error inserting collection: ${it.id}", e)
                                     }
                                 }
                         } catch (e: Exception) {
-                            Log.e(TAG, "Error inserting new collections", e)
+                            Timber.e( "Error inserting new collections", e)
                         }
                     } catch (e: Exception) {
-                        Log.e(TAG, "Error in synchronization process", e)
+                        Timber.e( "Error in synchronization process", e)
                     }
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Fatal error in synchronize method", e)
+                Timber.e( "Fatal error in synchronize method", e)
             }
 
             // Upon insert, we will replace all metadata already added so we can update titles,

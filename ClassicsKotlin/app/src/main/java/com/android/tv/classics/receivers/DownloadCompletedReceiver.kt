@@ -9,6 +9,7 @@ import android.os.Build
 import android.os.Environment
 import android.util.Log
 import androidx.core.content.FileProvider
+import timber.log.Timber
 import java.io.File
 
 /**
@@ -81,7 +82,7 @@ class DownloadCompletedReceiver : BroadcastReceiver() {
                                         return
                                     }
                                     
-                                    Log.e(TAG, "Could not find the downloaded APK file")
+                                    Timber.e( "Could not find the downloaded APK file")
                                 }
                             }
                         }
@@ -89,7 +90,7 @@ class DownloadCompletedReceiver : BroadcastReceiver() {
                 }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error handling download completion", e)
+            Timber.e( "Error handling download completion", e)
         }
     }
     
@@ -117,9 +118,9 @@ class DownloadCompletedReceiver : BroadcastReceiver() {
             }
             
             context.startActivity(intent)
-            Log.d(TAG, "APK installation intent launched")
+            Timber.d("APK installation intent launched")
         } catch (e: Exception) {
-            Log.e(TAG, "Error starting APK installation", e)
+            Timber.e( "Error starting APK installation", e)
         }
     }
 }

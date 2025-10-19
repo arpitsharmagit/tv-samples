@@ -28,6 +28,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import timber.log.Timber
 
 /**
  * Dialog fragment to show app update information and controls
@@ -76,7 +77,7 @@ class UpdateDialogFragment : DialogFragment() {
                 transaction.add(dialog, TAG)
                 transaction.commitAllowingStateLoss()
             } catch (e: Exception) {
-                Log.e(TAG, "Error showing update dialog", e)
+                Timber.e( "Error showing update dialog", e)
             }
         }
     }

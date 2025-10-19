@@ -6,6 +6,8 @@ import android.util.Log
 import android.widget.Toast
 import androidx.annotation.NonNull
 import androidx.lifecycle.LifecycleCoroutineScope
+import timber.log.Timber
+import com.android.tv.classics.utils.FileLoggingTree
 import com.android.tv.classics.jio.store.HttpStore
 import com.android.tv.classics.jio.store.PrefStore
 import com.android.tv.classics.utils.FirebaseAuthManager
@@ -19,6 +21,7 @@ import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.DatabaseReference
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ValueEventListener
+import com.android.tv.classics.utils.ApplicationContextProvider
 
 class LiveTvApplication : Application() {
     companion object {
@@ -110,7 +113,7 @@ class LiveTvApplication : Application() {
                 override fun onDataChange(dataSnapshot: DataSnapshot) {
                     val cloudHeaders = dataSnapshot.value
                     if (cloudHeaders != null) {
-                        Log.d(TAG, "Login Headers found for ${getMobileNumber()}")
+                        Timber.d("Login Headers found for ${getMobileNumber()}")
                         @Suppress("UNCHECKED_CAST")
                         setAuthHeaders(cloudHeaders as Map<String, Any>)
                         // TvLauncherUtils.refreshToken()
@@ -118,7 +121,7 @@ class LiveTvApplication : Application() {
                 }
                 
                 override fun onCancelled(databaseError: DatabaseError) {
-                    Log.e(TAG, "Cloud Database Error ${getMobileNumber()}", databaseError.toException())
+                    Timber.e( "Cloud Database Error ${getMobileNumber()}", databaseError.toException())
                 }
             })
         }
@@ -127,6 +130,18 @@ class LiveTvApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         instance = this
+
+        // Initialize application context provider
+        ApplicationContextProvider.init(this)
+
+        // Initialize Timber with our custom file logging tree
+        if (BuildConfig.DEBUG) {
+            // In debug builds, use both the debug tree and file logging tree
+            Timber.plant(Timber.DebugTree())
+        }
+        // Always plant the file logging tree for persistent logs
+        Timber.plant(FileLoggingTree(this))
+
         bootstrapApplication()
     }
 

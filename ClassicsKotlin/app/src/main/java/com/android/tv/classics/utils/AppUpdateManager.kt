@@ -22,6 +22,7 @@ import java.io.File
 import java.net.URL
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import timber.log.Timber
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
@@ -48,7 +49,7 @@ class AppUpdateManager(private val context: Context) {
         override fun onReceive(context: Context?, intent: Intent?) {
             val id = intent?.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1)
             if (id == downloadId) {
-                Log.d(TAG, "Download complete, installing update")
+                Timber.d("Download complete, installing update")
                 installDownloadedApk()
             }
         }
@@ -72,7 +73,7 @@ class AppUpdateManager(private val context: Context) {
         try {
             context.unregisterReceiver(downloadCompleteReceiver)
         } catch (e: Exception) {
-            Log.e(TAG, "Error unregistering receiver", e)
+            Timber.e( "Error unregistering receiver", e)
         }
     }
     
@@ -103,7 +104,7 @@ class AppUpdateManager(private val context: Context) {
                 minSupportedVersion = updateInfo.minSupportedVersion
             )
         } catch (e: Exception) {
-            Log.e(TAG, "Error checking for updates", e)
+            Timber.e( "Error checking for updates", e)
             return@withContext UpdateInfo(isUpdateAvailable = false)
         }
     }
@@ -153,7 +154,7 @@ class AppUpdateManager(private val context: Context) {
                     // This will be cleaned up when the app is uninstalled
                     val file = File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), APK_NAME)
                     setDestinationUri(Uri.fromFile(file))
-                    Log.d(TAG, "Using app-specific storage for download: ${file.absolutePath}")
+                    Timber.d("Using app-specific storage for download: ${file.absolutePath}")
                 }
                 
                 setMimeType(APK_MIME_TYPE)
@@ -163,7 +164,7 @@ class AppUpdateManager(private val context: Context) {
             downloadId = downloadManager.enqueue(request)
             return true
         } catch (e: Exception) {
-            Log.e(TAG, "Error starting download", e)
+            Timber.e( "Error starting download", e)
             return false
         }
     }
@@ -233,7 +234,7 @@ class AppUpdateManager(private val context: Context) {
                 }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error installing APK", e)
+            Timber.e( "Error installing APK", e)
             LiveTvApplication.showToast("Error installing update: ${e.message}")
         }
     }
@@ -262,7 +263,7 @@ class AppUpdateManager(private val context: Context) {
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             context.startActivity(intent)
         } catch (e: Exception) {
-            Log.e(TAG, "Error launching install intent", e)
+            Timber.e( "Error launching install intent", e)
             LiveTvApplication.showToast("Error installing update: ${e.message}")
         }
     }
@@ -279,7 +280,7 @@ class AppUpdateManager(private val context: Context) {
                 context.packageManager.getPackageInfo(context.packageName, 0).versionCode
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error getting current app version", e)
+            Timber.e( "Error getting current app version", e)
             BuildConfig.VERSION_CODE
         }
     }
@@ -308,11 +309,11 @@ class AppUpdateManager(private val context: Context) {
                 
                 return@withContext response.toString()
             } else {
-                Log.e(TAG, "Server returned error code: ${connection.responseCode}")
+                Timber.e( "Server returned error code: ${connection.responseCode}")
                 return@withContext ""
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error fetching update info", e)
+            Timber.e( "Error fetching update info", e)
             return@withContext ""
         }
     }
@@ -339,7 +340,7 @@ class AppUpdateManager(private val context: Context) {
                 minSupportedVersion = json.optInt("minSupportedVersion", 0)
             )
         } catch (e: Exception) {
-            Log.e(TAG, "Error parsing update info", e)
+            Timber.e( "Error parsing update info", e)
             UpdateInfo(isUpdateAvailable = false)
         }
     }

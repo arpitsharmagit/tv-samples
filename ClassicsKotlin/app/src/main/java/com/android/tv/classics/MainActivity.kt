@@ -38,6 +38,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.lifecycle.lifecycleScope
 import com.android.tv.classics.utils.FocusManager
+import timber.log.Timber
 
 /** Entry point for the Android TV application */
 class MainActivity : FragmentActivity() {
@@ -129,7 +130,7 @@ class MainActivity : FragmentActivity() {
             }
             
             if (!allGranted) {
-                Log.w(TAG, "Storage permissions not granted - updates may not work properly")
+                Timber.w( "Storage permissions not granted - updates may not work properly")
                 LiveTvApplication.showToast("Storage permissions required for app updates")
             }
         }
@@ -137,7 +138,7 @@ class MainActivity : FragmentActivity() {
     
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        Log.d(TAG, "onNewIntent called")
+        Timber.d("onNewIntent called")
         setIntent(intent)
         handleIntent(intent)
     }
@@ -150,13 +151,13 @@ class MainActivity : FragmentActivity() {
         // [MainActivity] is the main entry point for all intent filters
         if (intent.action == Intent.ACTION_VIEW || intent.action == Intent.ACTION_SEARCH) {
             val uri = intent.data ?: Uri.EMPTY
-            Log.d(TAG, "Intent ${intent.action} received: $uri")
+            Timber.d("Intent ${intent.action} received: $uri")
             when (uri.pathSegments.firstOrNull()) {
 
                 // Navigates to now playing screen for chosen "program"
                 "program" -> lifecycleScope.launch {
                     uri.lastPathSegment?.let { db.metadata().findById(it) }?.let { metadata ->
-                        Log.d(TAG, "Navigating to now playing for $metadata")
+                        Timber.d("Navigating to now playing for $metadata")
                         withContext(Dispatchers.Main) {
                             Navigation.findNavController(activity, R.id.fragment_container)
                                     .navigate(NavGraphDirections.actionToNowPlaying(metadata))
@@ -167,7 +168,7 @@ class MainActivity : FragmentActivity() {
                 // Scrolls to chosen "channel" in browse fragment
                 "channel" -> lifecycleScope.launch {
                     val channelId = uri.lastPathSegment
-                    Log.d(TAG, "Navigating to browser for channel $channelId")
+                    Timber.d("Navigating to browser for channel $channelId")
                     withContext(Dispatchers.Main) {
                         Navigation.findNavController(activity, R.id.fragment_container)
                                 .navigate(NavGraphDirections.actionToMediaBrowser()
@@ -175,17 +176,17 @@ class MainActivity : FragmentActivity() {
                     }
                 }
 
-                else -> Log.w(TAG, "VIEW intent received but unrecognized URI: $uri")
+                else -> Timber.w( "VIEW intent received but unrecognized URI: $uri")
             }
         } else if(LiveTvApplication.getMobileNumber() !=null && LiveTvApplication.getAuthHeaders()
                 .isNotEmpty()
         ){
-            Log.d(TAG, "Mobile No. "+ LiveTvApplication.getMobileNumber()+ " AuthHeaders Found.")
+            Timber.d("Mobile No. "+ LiveTvApplication.getMobileNumber()+ " AuthHeaders Found.")
             lifecycleScope.launch {
                 try {
                     TvLauncherUtils.refreshToken()
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error refreshing token", e)
+                    Timber.e( "Error refreshing token", e)
                 }
                 Navigation.findNavController(activity, R.id.fragment_container)
                     .navigate(NavGraphDirections.actionToMediaBrowser())
@@ -211,7 +212,7 @@ class MainActivity : FragmentActivity() {
                 val updateInfo = appUpdateManager.checkForUpdates()
                 
                 if (updateInfo.isUpdateAvailable) {
-                    Log.d(TAG, "Update available: ${updateInfo.versionName}")
+                    Timber.d("Update available: ${updateInfo.versionName}")
                     
                     // Make sure we're on the main thread
                     withContext(Dispatchers.Main) {
@@ -220,21 +221,21 @@ class MainActivity : FragmentActivity() {
                             // Show update dialog to the user using Leanback GuidedStepFragment
                             LeanbackUpdateDialogFragment.show(this@MainActivity, updateInfo)
                         } else {
-                            Log.d(TAG, "Activity no longer active, skipping update dialog")
+                            Timber.d("Activity no longer active, skipping update dialog")
                         }
                     }
                 } else {
-                    Log.d(TAG, "No updates available")
+                    Timber.d("No updates available")
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Error checking for updates", e)
+                Timber.e( "Error checking for updates", e)
             }
         }
     }
     
     override fun onDestroy() {
         super.onDestroy()
-        Log.d(TAG, "onDestroy called")
+        Timber.d("onDestroy called")
         
         // Clean up the app update manager
         appUpdateManager.destroy()
@@ -251,7 +252,7 @@ class MainActivity : FragmentActivity() {
                 navController.popBackStack(R.id.media_browser_fragment, false)
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error cleaning up fragments", e)
+            Timber.e( "Error cleaning up fragments", e)
         }
     }
 }

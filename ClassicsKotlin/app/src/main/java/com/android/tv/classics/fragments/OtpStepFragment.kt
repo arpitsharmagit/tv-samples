@@ -18,6 +18,7 @@ import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.cancelChildren
+import timber.log.Timber
 
 class OtpStepFragment: GuidedStepSupportFragment() {
     companion object {
@@ -50,7 +51,7 @@ class OtpStepFragment: GuidedStepSupportFragment() {
                 )
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error restoring focus", e)
+            Timber.e( "Error restoring focus", e)
         }
     }
 
@@ -61,7 +62,7 @@ class OtpStepFragment: GuidedStepSupportFragment() {
                 LiveTvApplication.showToast("Please enter 6 digit OTP.")
                 return
             }
-            Log.i(TAG, "Entered OTP $otp")
+            Timber.i( "Entered OTP $otp")
             TvLauncherUtils.verifyOTP(otp)
 
             lifecycleScope.launch{
@@ -84,7 +85,7 @@ class OtpStepFragment: GuidedStepSupportFragment() {
                 R.id.otp_step_fragment
             )
         } catch (e: Exception) {
-            Log.e(TAG, "Error saving focus", e)
+            Timber.e( "Error saving focus", e)
         }
     }
     

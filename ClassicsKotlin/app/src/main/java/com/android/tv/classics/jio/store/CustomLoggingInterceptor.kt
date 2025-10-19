@@ -7,6 +7,7 @@ import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody
 import okio.Buffer
+import timber.log.Timber
 import java.io.IOException
 
 class CustomLoggingInterceptor : Interceptor {
@@ -18,9 +19,6 @@ class CustomLoggingInterceptor : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
 
-        // Log Request Details
-        logCurlRequest(request)
-
         // Proceed with the request
         var response = chain.proceed(request)
 
@@ -31,12 +29,12 @@ class CustomLoggingInterceptor : Interceptor {
     }
 
     private fun logRequest(request: Request) {
-        Log.d(TAG, "Request URL: ${request.url}")
-        Log.d(TAG, "Request Method: ${request.method}")
+        Timber.d("Request URL: ${request.url}")
+        Timber.d("Request Method: ${request.method}")
 
         // Log Headers
         for (name in request.headers.names()) {
-            Log.d(TAG, "Request Header: $name = ${request.headers[name]}")
+            Timber.d("Request Header: $name = ${request.headers[name]}")
         }
 
         // Log Request Body
@@ -46,10 +44,10 @@ class CustomLoggingInterceptor : Interceptor {
             copyRequest.body?.let {
                 it.writeTo(buffer)
                 val requestBody = buffer.readUtf8()
-                Log.d(TAG, "Request Body: $requestBody")
+                Timber.d("Request Body: $requestBody")
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error logging request body", e)
+            Timber.e( "Error logging request body", e)
         }
     }
 
@@ -66,35 +64,56 @@ class CustomLoggingInterceptor : Interceptor {
             for (name in request.headers.names()) {
                 curlCmd.append(" -H '${name}: ${request.headers[name]}'")
             }
-            
-            // Add body
+
+            // Handle content type specific formatting
             request.body?.let {
-                val buffer = Buffer()
-                it.writeTo(buffer)
-                val bodyString = buffer.readUtf8()
-                if (bodyString.isNotEmpty()) {
-                    curlCmd.append(" -d '${bodyString.replace("'", "\\'")}'")
+                val contentType = it.contentType()?.toString() ?: ""
+                when {
+                    contentType.contains("application/x-www-form-urlencoded") -> {
+                        val buffer = Buffer()
+                        it.writeTo(buffer)
+                        val bodyString = buffer.readUtf8()
+                        curlCmd.append(" --data '${bodyString.replace("'", "\\'")}'")
+                    }
+                    contentType.contains("multipart/form-data") -> {
+                        curlCmd.append(" -F '${it.toString()}'")
+                    }
+                    contentType.contains("application/json") -> {
+                        val buffer = Buffer()
+                        it.writeTo(buffer)
+                        val bodyString = buffer.readUtf8()
+                        curlCmd.append(" -H 'Content-Type: application/json'")
+                        curlCmd.append(" -d '${bodyString.replace("'", "\\'")}'")
+                    }
+                    else -> {
+                        val buffer = Buffer()
+                        it.writeTo(buffer)
+                        val bodyString = buffer.readUtf8()
+                        curlCmd.append(" --data '${bodyString.replace("'", "\\'")}'")
+                    }
                 }
-            }
+            }            
             
             // Add URL
             curlCmd.append(" '${request.url}'")
             
-            Log.d(TAG, "cURL command: $curlCmd")
+            Timber.d("$curlCmd")
         } catch (e: Exception) {
-            Log.e(TAG, "Error creating cURL command", e)
+            Timber.e( "Error creating cURL command", e)
         }
     }
 
     private fun logResponse(response: Response): Response {
+        // Log Request Details
+        logCurlRequest(response.request)
         if (response.code == 200){
             return response
         }
-        Log.d(TAG, "Response URL: ${response.request.url}")
-        Log.d(TAG, "Response Code: ${response.code}")
+        Timber.d("Response URL: ${response.request.url}")
+        Timber.d("Response Code: ${response.code}")
         // Log Headers
         for (name in response.headers.names()) {
-            Log.d(TAG, "Response Header: $name = ${response.headers[name]}")
+            Timber.d("Response Header: $name = ${response.headers[name]}")
         }
 
         // Log Response Body
@@ -103,7 +122,7 @@ class CustomLoggingInterceptor : Interceptor {
             if (responseBody != null) {
                 val contentType = responseBody.contentType()
                 val bodyString = responseBody.string()
-                Log.d(TAG, "Response Body: $bodyString")
+                Timber.d("Response Body: $bodyString")
 
                 // Create a new response body as the original can only be read once
                 return response.newBuilder()
@@ -111,7 +130,7 @@ class CustomLoggingInterceptor : Interceptor {
                     .build()
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error logging response body", e)
+            Timber.e( "Error logging response body", e)
         }
         
         return response

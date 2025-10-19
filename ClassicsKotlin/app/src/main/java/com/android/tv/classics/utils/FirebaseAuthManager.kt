@@ -8,6 +8,7 @@ import com.google.firebase.database.FirebaseDatabase
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import timber.log.Timber
 
 /**
  * Utility class to handle Firebase Authentication
@@ -27,7 +28,7 @@ object FirebaseAuthManager {
         // Listen for auth state changes
         auth.addAuthStateListener { firebaseAuth ->
             currentUser = firebaseAuth.currentUser
-            Log.d(TAG, "Auth state changed. User logged in: ${currentUser != null}")
+            Timber.d("Auth state changed. User logged in: ${currentUser != null}")
         }
     }
     
@@ -54,14 +55,14 @@ object FirebaseAuthManager {
                 auth.signInAnonymously()
                     .addOnSuccessListener { result ->
                         currentUser = result.user
-                        Log.d(TAG, "Anonymous sign-in successful: ${currentUser?.uid}")
+                        Timber.d("Anonymous sign-in successful: ${currentUser?.uid}")
                     }
                     .addOnFailureListener { e ->
-                        Log.e(TAG, "Anonymous authentication failed", e)
+                        Timber.e( "Anonymous authentication failed", e)
                     }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error initiating anonymous authentication", e)
+            Timber.e( "Error initiating anonymous authentication", e)
         }
     }
     
@@ -74,11 +75,11 @@ object FirebaseAuthManager {
             if (currentUser == null) {
                 val result = auth.signInAnonymously().await()
                 currentUser = result.user
-                Log.d(TAG, "Anonymous sign-in successful: ${currentUser?.uid}")
+                Timber.d("Anonymous sign-in successful: ${currentUser?.uid}")
             }
             return@withContext currentUser != null
         } catch (e: Exception) {
-            Log.e(TAG, "Anonymous authentication failed", e)
+            Timber.e( "Anonymous authentication failed", e)
             return@withContext false
         }
     }
@@ -108,10 +109,10 @@ object FirebaseAuthManager {
                     "lastSignIn" to System.currentTimeMillis()
                 ))
                 
-                Log.d(TAG, "Updated user metadata for mobile number: $mobileNumber")
+                Timber.d("Updated user metadata for mobile number: $mobileNumber")
             }
             .addOnFailureListener { e ->
-                Log.e(TAG, "Failed to get ID token for metadata update", e)
+                Timber.e( "Failed to get ID token for metadata update", e)
             }
     }
     

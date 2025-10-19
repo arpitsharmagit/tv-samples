@@ -18,6 +18,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import timber.log.Timber
 
 /**
  * Leanback GuidedStepSupportFragment implementation for app update dialog
@@ -57,7 +58,7 @@ class LeanbackUpdateDialogFragment : GuidedStepSupportFragment() {
                 val fragment = newInstance(updateInfo)
                 add(activity.supportFragmentManager, fragment)
             } catch (e: Exception) {
-                Log.e(TAG, "Error showing update dialog", e)
+                Timber.e( "Error showing update dialog", e)
             }
         }
     }

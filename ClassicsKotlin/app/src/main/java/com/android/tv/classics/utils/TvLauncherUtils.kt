@@ -45,6 +45,7 @@ import com.androidnetworking.interfaces.JSONObjectRequestListener
 import com.androidnetworking.interfaces.OkHttpResponseListener
 import okhttp3.Response
 import org.json.JSONObject
+import timber.log.Timber
 
 /** Collection of static methods used to handle Android TV Home Screen Launcher operations */
 @RequiresApi(26)
@@ -102,7 +103,7 @@ class TvLauncherUtils private constructor() {
                 cursor?.close()
 
             } catch (exc: IllegalArgumentException) {
-                Log.e(TAG, "Error retrieving preview programs", exc)
+                Timber.e( "Error retrieving preview programs", exc)
             }
 
             return programs
@@ -127,7 +128,7 @@ class TvLauncherUtils private constructor() {
                 cursor?.close()
 
             } catch (exc: IllegalArgumentException) {
-                Log.e(TAG, "Error retrieving Watch Next programs", exc)
+                Timber.e( "Error retrieving Watch Next programs", exc)
             }
 
             return programs
@@ -135,7 +136,7 @@ class TvLauncherUtils private constructor() {
 
         /** Remove a program given a [TvMediaMetadata] object */
         @Synchronized fun removeProgram(context: Context, metadata: TvMediaMetadata): Long? {
-            Log.d(TAG, "Removing content from watch next: $metadata")
+            Timber.d("Removing content from watch next: $metadata")
 
             // First, get all the programs from all of our channels
             val allPrograms = getPreviewPrograms(context)
@@ -146,12 +147,12 @@ class TvLauncherUtils private constructor() {
             // prevents more than one program added to the content provider sharing content ID by
             // adding the same program to multiple channels
             val foundProgram = allPrograms.find { it.contentId == metadata.id }
-            if (foundProgram == null) Log.e(TAG, "No program found with content ID ${metadata.id}")
+            if (foundProgram == null) Timber.e( "No program found with content ID ${metadata.id}")
 
             // Use the found program's URI to delete it from the content resolver
             return foundProgram?.let {
                 PreviewChannelHelper(context).deletePreviewProgram(it.id)
-                Log.d(TAG, "Program successfully removed from home screen")
+                Timber.d("Program successfully removed from home screen")
                 it.id
             }
         }
@@ -221,7 +222,7 @@ class TvLauncherUtils private constructor() {
                 // Update channel in the system's content provider
                 PreviewChannelHelper(context)
                         .updatePreviewChannel(existingChannel.id, updatedChannel)
-                Log.d(TAG, "Updated channel ${existingChannel.id}")
+                Timber.d("Updated channel ${existingChannel.id}")
 
                 // Return the existing channel's ID
                 existingChannel.id
@@ -231,12 +232,12 @@ class TvLauncherUtils private constructor() {
                 // Insert channel, return null if URI in content provider is null
                 try {
                     val channelId = PreviewChannelHelper(context).publishChannel(updatedChannel)
-                    Log.d(TAG, "Published channel $channelId")
+                    Timber.d("Published channel $channelId")
                     channelId
 
                 } catch (exc: Throwable) {
                     // Early exit: return null if we couldn't insert the channel
-//                    Log.e(TAG, "Unable to publish channel", exc)
+//                    Timber.e( "Unable to publish channel", exc)
                     return null
                 }
             }
@@ -278,14 +279,14 @@ class TvLauncherUtils private constructor() {
                 try {
                     if (existingProgram == null) {
                         PreviewChannelHelper(context).publishPreviewProgram(updatedProgram)
-                        Log.d(TAG, "Inserted program into channel: $updatedProgram")
+                        Timber.d("Inserted program into channel: $updatedProgram")
                     } else {
                         PreviewChannelHelper(context)
                                 .updatePreviewProgram(existingProgram.id, updatedProgram)
-                        Log.d(TAG, "Updated program in channel: $updatedProgram")
+                        Timber.d("Updated program in channel: $updatedProgram")
                     }
                 } catch (exc: IllegalArgumentException) {
-                    Log.e(TAG, "Unable to add program: $updatedProgram", exc)
+                    Timber.e( "Unable to add program: $updatedProgram", exc)
                 }
             }
 
@@ -296,19 +297,19 @@ class TvLauncherUtils private constructor() {
 
         /** Remove a [TvMediaCollection] object from the channel list */
         @Synchronized fun removeChannel(context: Context, collection: TvMediaCollection): Long? {
-            Log.d(TAG, "Removing channel from home screen: $collection")
+            Timber.d("Removing channel from home screen: $collection")
 
             // First, get all the channels added to the home screen
             val allChannels = PreviewChannelHelper(context).allChannels
 
             // Now find the channel with the matching content ID for our collection
             val foundChannel = allChannels.find { it.internalProviderId == collection.id }
-            if (foundChannel == null) Log.e(TAG, "No channel with ID ${collection.id}")
+            if (foundChannel == null) Timber.e( "No channel with ID ${collection.id}")
 
             // Use the found channel's ID to delete it from the content resolver
             return foundChannel?.let {
                 PreviewChannelHelper(context).deletePreviewChannel(it.id)
-                Log.d(TAG, "Channel successfully removed from home screen")
+                Timber.d("Channel successfully removed from home screen")
 
                 // Remove all of the channel programs as well
                 val channelPrograms =
@@ -322,7 +323,7 @@ class TvLauncherUtils private constructor() {
 
         /** Insert or update a [TvMediaMetadata] into the watch next row */
         @Synchronized fun upsertWatchNext(context: Context, metadata: TvMediaMetadata): Long? {
-            Log.d(TAG, "Adding program to watch next row: $metadata")
+            Timber.d("Adding program to watch next row: $metadata")
 
             // If we already have a program with this ID, use it as a base for updated program
             val existingProgram = getWatchNextPrograms(context).find { it.contentId == metadata.id }
@@ -355,7 +356,7 @@ class TvLauncherUtils private constructor() {
                 // If the program is already in the watch next row, update it
                 PreviewChannelHelper(context)
                         .updateWatchNextProgram(updatedProgram, existingProgram.id)
-                Log.d(TAG, "Updated program in watch next row: $updatedProgram")
+                Timber.d("Updated program in watch next row: $updatedProgram")
                 existingProgram.id
             } else {
 
@@ -363,10 +364,10 @@ class TvLauncherUtils private constructor() {
                 try {
                     val programId = PreviewChannelHelper(context)
                             .publishWatchNextProgram(updatedProgram)
-                    Log.d(TAG, "Added program to watch next row: $updatedProgram")
+                    Timber.d("Added program to watch next row: $updatedProgram")
                     programId
                 } catch (exc: IllegalArgumentException) {
-                    Log.e(TAG, "Unable to add program to watch next row")
+                    Timber.e( "Unable to add program to watch next row")
                     null
                 }
             }
@@ -374,7 +375,7 @@ class TvLauncherUtils private constructor() {
 
         /** Remove a [TvMediaMetadata] object from the watch next row */
         @Synchronized fun removeFromWatchNext(context: Context, metadata: TvMediaMetadata): Uri? {
-            Log.d(TAG, "Removing content from watch next: $metadata")
+            Timber.d("Removing content from watch next: $metadata")
 
             // First, get all the programs in the watch next row
             val allPrograms = getWatchNextPrograms(context)
@@ -382,7 +383,7 @@ class TvLauncherUtils private constructor() {
             // Now find the program with the matching content ID for our metadata
             val foundProgram = allPrograms.find { it.contentId == metadata.id }
             if (foundProgram == null)
-                Log.e(TAG, "No program found in Watch Next with content ID ${metadata.id}")
+                Timber.e( "No program found in Watch Next with content ID ${metadata.id}")
 
             // Use the found program's URI to delete it from the content resolver
             return foundProgram?.let {
@@ -391,11 +392,11 @@ class TvLauncherUtils private constructor() {
                         programUri, null, null)
 
                 if (deleteCount == 1) {
-                    Log.d(TAG, "Content successfully removed from watch next")
+                    Timber.d("Content successfully removed from watch next")
                     programUri
 
                 } else {
-                    Log.e(TAG, "Content failed to be removed from watch next " +
+                    Timber.e( "Content failed to be removed from watch next " +
                             "(delete count $deleteCount)")
                     null
                 }
@@ -411,13 +412,14 @@ class TvLauncherUtils private constructor() {
                         request.getAsJSONObject(object : JSONObjectRequestListener {
                             override fun onResponse(response: JSONObject) {
                                 if (continuation.isActive) {
-                                    if (response.has("authToken")) {
+                                    if (response.has("data") && response.getJSONObject("data").has("authToken")) {
                                         val updatedHeaders = headers.toMutableMap()
-                                        updatedHeaders["authToken"] = response.getString("authToken")
+                                        val authToken = response.getJSONObject("data").getString("authToken")
+                                        updatedHeaders["authToken"] = authToken
                                         LiveTvApplication.setAuthHeaders(updatedHeaders)
-                                        Log.d(TAG,"Refreshed Token ["+ response.getString("authToken")+ "] and updated ["+ LiveTvApplication.getAuthHeaders()["authToken"] +"]")
+                                        Timber.d("Refreshed Token [$authToken] and updated [${LiveTvApplication.getAuthHeaders()["authToken"]}]")
                                     } else {
-                                        Log.d(TAG, "No auth token in response")
+                                        Timber.d("No auth token in response")
                                     }
                                     continuation.resume(response)
                                 }
@@ -425,7 +427,7 @@ class TvLauncherUtils private constructor() {
                             
                             override fun onError(error: ANError) {
                                 if (continuation.isActive) {
-                                    Log.e(TAG, "Unable to Refresh Token.", error.cause)
+                                    Timber.e( "Unable to Refresh Token.", error.cause)
                                     continuation.resume(JSONObject())
                                 }
                             }
@@ -439,7 +441,7 @@ class TvLauncherUtils private constructor() {
                 
 
             } catch (e: Exception) {
-                Log.e(TAG, "Error refreshing token", e)
+                Timber.e( "Error refreshing token", e)
             }
         }
 

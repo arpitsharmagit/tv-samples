@@ -32,6 +32,7 @@ import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.lifecycleScope
+import timber.log.Timber
 
 /*
  * This [BroadcastReceiver] is invoked when the home screen launcher sends an explicit broadcast
@@ -47,13 +48,13 @@ class TvLauncherReceiver : BroadcastReceiver() {
 
     /** Execute the broadcast listener in a co-routine */
     override fun onReceive(context: Context, intent: Intent) {
-        Log.d(TAG, "onReceive ${intent.action}")
+        Timber.d("onReceive ${intent.action}")
         val database = TvMediaDatabase.getInstance(context)
 
         when (intent.action) {
             // Initializes channel
             TvContractCompat.ACTION_INITIALIZE_PROGRAMS -> {
-                Log.d(TAG, "Handling INITIALIZE_PROGRAMS broadcast")
+                Timber.d("Handling INITIALIZE_PROGRAMS broadcast")
                 // Synchronizes all program and channel data
                 WorkManager.getInstance(context).enqueue(
                         OneTimeWorkRequestBuilder<TvMediaSynchronizer>().build())
@@ -64,7 +65,7 @@ class TvLauncherReceiver : BroadcastReceiver() {
                 // Get the ID of the program from the intent extras
                 val programId =
                         intent.extras?.getLong(TvContractCompat.EXTRA_PREVIEW_PROGRAM_ID)
-                Log.d(TAG, "User added program $programId to watch next")
+                Timber.d("User added program $programId to watch next")
 
                 // Retrieve the metadata item that matches this ID and update state in our database
                 updateMetadata(context, database, programId) { it.apply { watchNext = true }}
@@ -75,7 +76,7 @@ class TvLauncherReceiver : BroadcastReceiver() {
                 // Get the ID of the program disabled from the intent extras
                 val programId =
                         intent.extras?.getLong(TvContractCompat.EXTRA_PREVIEW_PROGRAM_ID)
-                Log.d(TAG, "User removed program $programId from watch next")
+                Timber.d("User removed program $programId from watch next")
 
                 // Retrieve the metadata item that matches this ID and update state in our database
                 updateMetadata(context, database, programId) { it.apply { watchNext = false }}
@@ -86,13 +87,13 @@ class TvLauncherReceiver : BroadcastReceiver() {
                 // Get the ID of the program from the intent extras
                 val programId =
                         intent.extras?.getLong(TvContractCompat.EXTRA_PREVIEW_PROGRAM_ID)
-                Log.d(TAG, "User removed program $programId from channel")
+                Timber.d("User removed program $programId from channel")
 
                 // Retrieve the metadata item that matches this ID and mark it as hidden
                 updateMetadata(context, database, programId) { it.apply { hidden = true }}
             }
             else -> {
-                Log.w(TAG, "Unknown action: ${intent.action}")
+                Timber.w( "Unknown action: ${intent.action}")
             }
         }
     }

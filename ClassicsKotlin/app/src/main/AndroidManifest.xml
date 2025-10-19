@@ -97,6 +97,16 @@
             </intent-filter>
 
             <!-- Additional settings for searchable content -->
+        </activity>
+
+        <!-- Log Viewer Activity -->
+        <activity
+            android:name="com.android.tv.classics.activities.LogViewerActivity"
+            android:exported="false"
+            android:label="Log Viewer"
+            android:screenOrientation="landscape"
+            android:theme="@style/Theme.Leanback"
+            android:keepScreenOn="true">
             <meta-data
                 android:name="android.app.searchable"
                 android:resource="@xml/searchable" />

@@ -61,6 +61,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import timber.log.Timber
 import java.text.SimpleDateFormat
 import java.time.Instant
 import java.util.Calendar
@@ -169,7 +170,7 @@ class NowPlayingFragment : VideoSupportFragment() {
                 try {
                     TvLauncherUtils.refreshToken()
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error refreshing token", e)
+                    Timber.e( "Error refreshing token", e)
                 }
                 
                 try {
@@ -199,7 +200,7 @@ class NowPlayingFragment : VideoSupportFragment() {
                                 isCatchupAvailable = obj.optBoolean("isCatchupAvailable", false)
                             )
                         } catch (e: Exception) {
-                            Log.e(TAG, "Error parsing EPG item", e)
+                            Timber.e( "Error parsing EPG item", e)
                             // Return a default item if parsing fails
                             TvMediaEPG(
                                 srno = 0,
@@ -221,14 +222,14 @@ class NowPlayingFragment : VideoSupportFragment() {
                         var currentShow = findCurrentShow()
                         startPlayingCurrentShow(currentShow)
                     } else {
-                        Log.e(TAG, "No EPG data available for channel ${metadata.id}")
+                        Timber.e( "No EPG data available for channel ${metadata.id}")
                         // Show a message to the user
                         withContext(Dispatchers.Main) {
                             LiveTvApplication.showToast("No program information available")
                         }
                     }
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error processing EPG data", e)
+                    Timber.e( "Error processing EPG data", e)
                     // Show error message to user
                     withContext(Dispatchers.Main) {
                         LiveTvApplication.showToast("Error loading program information")
@@ -305,7 +306,7 @@ class NowPlayingFragment : VideoSupportFragment() {
             }
         }
         catch(e: Exception){
-            Log.e(TAG,"error occurred while playing",e);
+            Timber.e("error occurred while playing",e);
         }
     }
 
@@ -406,7 +407,7 @@ class NowPlayingFragment : VideoSupportFragment() {
 //                }
 
                 // Schedules the next metadata update in METADATA_UPDATE_INTERVAL_MILLIS milliseconds
-                Log.d(TAG, "Media metadata updated successfully")
+                Timber.d("Media metadata updated successfully")
                 view?.postDelayed(this, METADATA_UPDATE_INTERVAL_MILLIS)
             }
         }
@@ -451,14 +452,14 @@ class NowPlayingFragment : VideoSupportFragment() {
                     if (glue?.isPlaying == true && player.contentDuration > 0) {
                         // When playback is ready, skip to last known position
                         var currentShow = findCurrentShow()
-//                        Log.d(TAG,"DURATION ======" + player.duration.toString() +" "+ player.contentDuration+" "+player.contentPosition)
-//                        Log.d(TAG,"Range ===="+ player.contentPosition +" "+(player.contentDuration - (currentShow?.endEpoch!! - Calendar.getInstance().time.time)))
+//                        Timber.d("DURATION ======" + player.duration.toString() +" "+ player.contentDuration+" "+player.contentPosition)
+//                        Timber.d("Range ===="+ player.contentPosition +" "+(player.contentDuration - (currentShow?.endEpoch!! - Calendar.getInstance().time.time)))
                         val remainingShowTimeMS = (currentShow?.endEpoch!! - Calendar.getInstance().time.time)
                         val diffOfPlaybackPosition = (player.contentDuration - remainingShowTimeMS) - player.contentPosition
 
                         if(diffOfPlaybackPosition> 10000 && arrayOf("154","155","162","289","291","471","474","476","483","514","524","525","872","1393","1396").contains(metadata.id)){
                             var seekPostion =  player.contentDuration - remainingShowTimeMS
-                            Log.d(TAG,"SEEK POSITION ======" + seekPostion.toString()+ " contentDuration === "+ player.contentDuration)
+                            Timber.d("SEEK POSITION ======" + seekPostion.toString()+ " contentDuration === "+ player.contentDuration)
                             seekTo(seekPostion)
                         }
                     }
@@ -468,7 +469,7 @@ class NowPlayingFragment : VideoSupportFragment() {
                     if (glue?.isPrepared == true) {
                         // When playback is ready, skip to last known position
 //                        val startingPosition = metadata.playbackPositionMillis ?: 0
-//                        Log.d(TAG, "Setting starting playback position to $startingPosition")
+//                        Timber.d("Setting starting playback position to $startingPosition")
 //                        seekTo(0)
                     }
                 }
@@ -540,7 +541,7 @@ class NowPlayingFragment : VideoSupportFragment() {
             //  Leanback's [PlaybackSupportFragment]
             if (!playerGlue.host.isControlsOverlayVisible &&
                     keyCode == KeyEvent.KEYCODE_BACK && event.action == KeyEvent.ACTION_DOWN) {
-                Log.d(TAG, "Intercepting BACK key for fragment navigation")
+                Timber.d("Intercepting BACK key for fragment navigation")
                 try {
                     // Stop and release the player
                     player.stop()
@@ -557,7 +558,7 @@ class NowPlayingFragment : VideoSupportFragment() {
                             requireActivity(), R.id.fragment_container)
                     navController.currentDestination?.id?.let { navController.popBackStack(it, true) }
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error during back navigation", e)
+                    Timber.e( "Error during back navigation", e)
                 }
                 return@setOnKeyInterceptListener true
             }
@@ -619,7 +620,7 @@ class NowPlayingFragment : VideoSupportFragment() {
                 )
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error restoring focus", e)
+            Timber.e( "Error restoring focus", e)
         }
     }
 
@@ -651,7 +652,7 @@ class NowPlayingFragment : VideoSupportFragment() {
             // Cancel any pending callbacks
             view?.removeCallbacks(updateMetadataTask)
         } catch (e: Exception) {
-            Log.e(TAG, "Error in onPause", e)
+            Timber.e( "Error in onPause", e)
         }
     }
     
@@ -665,7 +666,7 @@ class NowPlayingFragment : VideoSupportFragment() {
                 R.id.now_playing_fragment
             )
         } catch (e: Exception) {
-            Log.e(TAG, "Error saving focus", e)
+            Timber.e( "Error saving focus", e)
         }
     }
 
@@ -684,7 +685,7 @@ class NowPlayingFragment : VideoSupportFragment() {
             // Cancel any pending callbacks
             view?.removeCallbacks(updateMetadataTask)
         } catch (e: Exception) {
-            Log.e(TAG, "Error cleaning up resources", e)
+            Timber.e( "Error cleaning up resources", e)
         }
     }
 
@@ -721,14 +722,14 @@ class NowPlayingFragment : VideoSupportFragment() {
 //        override fun onPlayerStateChanged(playWhenReady: Boolean, playbackState: Int) {
 //            if (playWhenReady && playbackState == Player.STATE_READY) {
 //                // media actually playing
-//                Log.i(TAG,"started Playing");
-//                Log.i(TAG,player.contentDuration.toString())
+//                Timber.i("started Playing");
+//                Timber.i(player.contentDuration.toString())
 ////                player.seekTo(C.TIME_UNSET);
 //            }
 //        }
         override fun onPlayerError(error: ExoPlaybackException) {
 
-            Log.e(TAG,"PlayError: ChannelNo: ${metadata.id} Url: ${metadata.contentUri}",error);
+            Timber.e("PlayError: ChannelNo: ${metadata.id} Url: ${metadata.contentUri}",error);
 //            removeWatchNext()
             decreasePlayCount()
         }

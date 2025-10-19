@@ -17,6 +17,7 @@
 package com.android.tv.classics.fragments
 
 import android.animation.ArgbEvaluator
+import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.PorterDuff
@@ -41,6 +42,7 @@ import android.animation.ValueAnimator
 import android.graphics.Bitmap
 import android.graphics.drawable.Drawable
 import android.media.ThumbnailUtils
+import android.net.Uri
 import androidx.appcompat.content.res.AppCompatResources
 import androidx.core.graphics.ColorUtils
 import androidx.core.graphics.drawable.toBitmap
@@ -51,12 +53,14 @@ import coil.api.get
 import coil.api.getAny
 import coil.bitmappool.BitmapPool
 import coil.transform.Transformation
+import com.android.tv.classics.activities.LogViewerActivity
 import com.android.tv.classics.presenters.TvMediaMetadataPresenter
 import com.android.tv.classics.utils.TvLauncherUtils
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.withContext
+import timber.log.Timber
 import java.util.concurrent.TimeUnit
 
 /**
@@ -112,7 +116,7 @@ class MediaBrowserFragment : BrowseSupportFragment() {
         setOnItemViewSelectedListener { _, item, _, row ->
             if (item == null) return@setOnItemViewSelectedListener
             val metadata = item as TvMediaMetadata
-            Log.d(TAG, "Row selected: ${row.id}. Item selected: ${metadata.id}")
+            //Timber.d("Row selected: ${row.id}. Item selected: ${metadata.id}")
 
             // Launch the background tint update task in a coroutine
             lifecycleScope.launch(Dispatchers.IO) {
@@ -130,19 +134,23 @@ class MediaBrowserFragment : BrowseSupportFragment() {
                                 ColorUtils.setAlphaComponent(dominantColor, BACKGROUND_TINT_ALPHA)
 
                         // Set the partly transparent dominant color as the background tint
-                        Log.d(TAG, "Using dominant color for background tint: $backgroundColor")
+                        Timber.d("Using dominant color for background tint: $backgroundColor")
                         updateBackgroundTint(backgroundColor)
                     }
                 }
             }
         }
 
-        // When user clicks on an item, navigate to the now playing screen
+        // When user clicks on an item, navigate to the appropriate screen
         setOnItemViewClickedListener { _, item, _, _ ->
             val metadata = item as TvMediaMetadata
-            Navigation.findNavController(
-                    requireActivity(), R.id.fragment_container).navigate(
-                    MediaBrowserFragmentDirections.actionToNowPlaying(metadata))
+            if (metadata.id == "log_viewer") {
+                startActivity(Intent(requireContext(), LogViewerActivity::class.java))
+            } else {
+                Navigation.findNavController(
+                        requireActivity(), R.id.fragment_container).navigate(
+                        MediaBrowserFragmentDirections.actionToNowPlaying(metadata))
+            }
         }
 
         // Instantiate the credits row, which will be added to the adapter inside [populateAdapter]
@@ -213,7 +221,7 @@ class MediaBrowserFragment : BrowseSupportFragment() {
                         view
                     )
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error restoring focus", e)
+                    Timber.e( "Error restoring focus", e)
                 }
             }
         } }
@@ -266,9 +274,23 @@ class MediaBrowserFragment : BrowseSupportFragment() {
 
             // Add a list row for the <header, row adapter> pair
             ListRow(header, listRowAdapter)
-        }
+        }.toMutableList()
 
-        // Add all new rows at once using our diff callback for a smooth animation
+        // Add Log Viewer row at the end
+        val logViewerHeader = HeaderItem(collections.size.toLong(), "Log Viewer")
+        val logViewerAdapter = ArrayObjectAdapter(TvMediaMetadataPresenter()).apply {
+            add(TvMediaMetadata(
+                id = "log_viewer",
+                title = "View Application Logs",
+                lang = "6",
+                collectionId = "8",
+                contentUri = Uri.EMPTY,
+                artUri = null
+            ))
+        }
+        collectionRows.add(ListRow(logViewerHeader, logViewerAdapter))
+
+        // Add all rows at once using our diff callback for a smooth animation
         adapter.setItems(collectionRows, listRowDiffCallback)
 
         // If we are being requested to scroll to a specific channel, find its index now
@@ -283,7 +305,7 @@ class MediaBrowserFragment : BrowseSupportFragment() {
         if (scrollPosition != selectedPosition || rowCount != adapter.size()) {
             view?.postDelayed({
                 setSelectedPosition(scrollPosition, true)
-                Log.d(TAG, "Requesting scrolling to $scrollPosition")
+                Timber.d("Requesting scrolling to $scrollPosition")
             }, BACKGROUND_ANIMATION_MILLIS)
         }
     }
@@ -307,7 +329,7 @@ class MediaBrowserFragment : BrowseSupportFragment() {
                 R.id.media_browser_fragment
             )
         } catch (e: Exception) {
-            Log.e(TAG, "Error saving focus", e)
+            Timber.e( "Error saving focus", e)
         }
     }
     

@@ -16,6 +16,7 @@ import com.android.tv.classics.utils.TvLauncherUtils
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.cancelChildren
+import timber.log.Timber
 
 class MobileStepFragment: GuidedStepSupportFragment() {
     companion object {
@@ -48,7 +49,7 @@ class MobileStepFragment: GuidedStepSupportFragment() {
                 )
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error restoring focus", e)
+            Timber.e( "Error restoring focus", e)
         }
     }
 
@@ -59,7 +60,7 @@ class MobileStepFragment: GuidedStepSupportFragment() {
                 LiveTvApplication.showToast("Please enter 10 digit mobile Number.")
                 return
             }
-            Log.i(TAG, "Entered Mobile Number $mobileNumber")
+            Timber.i( "Entered Mobile Number $mobileNumber")
             LiveTvApplication.setMobileNumber(mobileNumber)
 
             if(LiveTvApplication.getAuthHeaders().isNotEmpty()){
@@ -67,7 +68,7 @@ class MobileStepFragment: GuidedStepSupportFragment() {
                     try {
                         TvLauncherUtils.refreshToken()
                     } catch (e: Exception) {
-                        Log.e(TAG, "Error refreshing token", e)
+                        Timber.e( "Error refreshing token", e)
                     }
                     Navigation.findNavController(requireActivity(), R.id.fragment_container)
                         .navigate(NavGraphDirections.actionToMediaBrowser())
@@ -91,7 +92,7 @@ class MobileStepFragment: GuidedStepSupportFragment() {
                 R.id.mobile_step_fragment
             )
         } catch (e: Exception) {
-            Log.e(TAG, "Error saving focus", e)
+            Timber.e( "Error saving focus", e)
         }
     }
     

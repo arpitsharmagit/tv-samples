@@ -24,6 +24,7 @@ import android.net.Uri
 import android.util.Log
 import com.android.tv.classics.models.TvMediaDatabase
 import com.android.tv.classics.models.TvMediaMetadata
+import timber.log.Timber
 
 /** Expose metadata to the system's global search and Google Assistant */
 class TvMediaProvider : ContentProvider() {
@@ -52,7 +53,7 @@ class TvMediaProvider : ContentProvider() {
             database.metadata().contentProviderQuery(TvMediaMetadata.searchableText(selector))
         }
         val stringResult = DatabaseUtils.dumpCursorToString(result)
-        Log.d(TAG, "Handling query for $uri; \"${selectionArgs?.firstOrNull()}\" --> count=${result?.count}; result=$stringResult")
+        Timber.d("Handling query for $uri; \"${selectionArgs?.firstOrNull()}\" --> count=${result?.count}; result=$stringResult")
         result
     } else {
         throw IllegalArgumentException("Invalid URI: $uri")

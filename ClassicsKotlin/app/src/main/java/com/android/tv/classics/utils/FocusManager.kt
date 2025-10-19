@@ -8,6 +8,7 @@ import android.view.ViewGroup
 import android.widget.Button
 import androidx.core.view.ViewCompat
 import androidx.fragment.app.Fragment
+import timber.log.Timber
 
 /**
  * Utility class to manage focus positions between fragment transitions
@@ -34,7 +35,7 @@ object FocusManager {
         
         // Store position information if view has ID
         if (focusedId != View.NO_ID) {
-            Log.d(TAG, "Saving focus state for destination $destinationId, view ID: $focusedId")
+            Timber.d("Saving focus state for destination $destinationId, view ID: $focusedId")
             focusPositions[destinationId] = FocusState(focusedId)
         }
     }
@@ -52,10 +53,10 @@ object FocusManager {
         val viewToFocus = rootView.findViewById<View>(focusState.viewId)
         
         if (viewToFocus != null && viewToFocus.isShown && viewToFocus.isFocusable) {
-            Log.d(TAG, "Restoring focus for destination $destinationId to view ID: ${focusState.viewId}")
+            Timber.d("Restoring focus for destination $destinationId to view ID: ${focusState.viewId}")
             viewToFocus.requestFocus()
         } else {
-            Log.d(TAG, "Could not restore focus - finding first focusable view")
+            Timber.d("Could not restore focus - finding first focusable view")
             findFirstFocusableView(rootView)?.requestFocus()
         }
     }
