@@ -8,7 +8,7 @@ import java.io.BufferedReader
 import java.io.FileReader
 
 object LogManager {
-    private const val MAX_LOG_LINES = 25 // Limit to latest 25 records
+    private const val MAX_LOG_LINES = 100 // Limit to latest 100 records
     private const val DEFAULT_LOG_LEVEL = "ERROR" // Default to ERROR level
     
     fun clearLogs() {
@@ -38,6 +38,11 @@ object LogManager {
         
         if (!logDir.exists()) return emptyList()
 
+        // Always include crash logs if they exist when ERROR level is selected
+        if (logLevel == "ERROR") {
+            logLines.addAll(CrashLogger.getCrashLogs(context))
+        }
+        
         // Read all log files in reverse order (newest first)
         val logFiles = (listOf(File(logDir, "app.log")) + 
                       (1..4).map { File(logDir, "app.log.$it") })

@@ -18,20 +18,47 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:minHeight="48dp"
-            android:nextFocusRight="@+id/clearLogsButton"
+            android:nextFocusRight="@+id/decreaseFontButton"
             android:nextFocusDown="@+id/logTextView"
             android:focusable="true"
             android:focusableInTouchMode="true"/>
 
         <androidx.leanback.widget.ImageCardView
-            android:id="@+id/clearLogsButton"
+            android:id="@+id/increaseFontButton"
             android:layout_width="wrap_content"
-            android:layout_height="48dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:nextFocusLeft="@id/decreaseFontButton"
+            android:nextFocusRight="@+id/clearLogsButton"
+            android:clickable="true"
+            android:background="@android:color/transparent"
+            style="@style/Widget.Leanback.ImageCardViewStyle"/>
+
+        <androidx.leanback.widget.ImageCardView
+            android:id="@+id/decreaseFontButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
             android:layout_marginStart="16dp"
             android:focusable="true"
             android:focusableInTouchMode="true"
             android:nextFocusLeft="@id/logLevelSpinner"
-            android:nextFocusDown="@+id/logTextView"/></LinearLayout>
+            android:nextFocusRight="@+id/increaseFontButton"
+            android:clickable="true"
+            style="@style/Widget.Leanback.ImageCardViewStyle"/>
+
+        <androidx.leanback.widget.ImageCardView
+            android:id="@+id/clearLogsButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:nextFocusLeft="@id/increaseFontButton"
+            android:nextFocusDown="@+id/logTextView"
+            android:clickable="true"
+            style="@style/Widget.Leanback.ImageCardViewStyle"/></LinearLayout>
 
     <ScrollView
         android:id="@+id/scrollView"

@@ -1,5 +1,6 @@
 package com.android.tv.classics.fragments
 
+import android.content.Context
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -12,10 +13,17 @@ import android.text.SpannableStringBuilder
 import android.text.style.ForegroundColorSpan
 import android.text.Spannable
 import androidx.core.content.ContextCompat
+import android.view.KeyEvent
+import android.view.animation.AccelerateDecelerateInterpolator
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.yield
+import kotlinx.coroutines.cancelChildren
 import androidx.leanback.app.GuidedStepSupportFragment
 import androidx.leanback.widget.GuidedAction
 import androidx.leanback.widget.GuidanceStylist
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.android.tv.classics.R
@@ -23,13 +31,25 @@ import com.android.tv.classics.utils.LogManager
 import timber.log.Timber
 
 class LogViewerFragment : Fragment() {
-    private lateinit var logTextView: TextView
-    private lateinit var logLevelSpinner: Spinner
-    private lateinit var scrollView: ScrollView
-    private lateinit var clearLogsButton: androidx.leanback.widget.ImageCardView
+    private var _binding: View? = null
+    private val binding get() = _binding!!
+    
+    private var logTextView: TextView? = null
+    private var logLevelSpinner: Spinner? = null
+    private var scrollView: ScrollView? = null
+    private var clearLogsButton: androidx.leanback.widget.ImageCardView? = null
+    private var increaseFontButton: androidx.leanback.widget.ImageCardView? = null
+    private var decreaseFontButton: androidx.leanback.widget.ImageCardView? = null
     private var currentLogLevel = "ERROR" // Default to ERROR level
+    private var currentFontSize = 10f // Default font size
+    private val minFontSize = 8f
+    private val maxFontSize = 20f
     
     private val logLevels = listOf("ERROR", "WARN", "INFO", "DEBUG", "VERBOSE", "ALL") // Reorder to show ERROR first
+    
+    // Coroutine scope for log updates
+    private val logUpdateJob = Job()
+    private val logUpdateScope = CoroutineScope(Dispatchers.Main + logUpdateJob)
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
         return inflater.inflate(R.layout.fragment_log_viewer, container, false)
@@ -37,18 +57,25 @@ class LogViewerFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        _binding = view
         
         // Initialize views
         logTextView = view.findViewById(R.id.logTextView)
         logLevelSpinner = view.findViewById(R.id.logLevelSpinner)
         scrollView = view.findViewById(R.id.scrollView)
         clearLogsButton = view.findViewById(R.id.clearLogsButton)
+        increaseFontButton = view.findViewById(R.id.increaseFontButton)
+        decreaseFontButton = view.findViewById(R.id.decreaseFontButton)
         
         // Set up spinner
         setupSpinner()
         
-        // Setup clear logs button
+        // Setup buttons
         setupClearLogsButton()
+        setupFontSizeButtons()
+        
+        // Load saved font size
+        loadSavedFontSize()
         
         // Initial load of logs
         refreshLogs()
@@ -66,8 +93,8 @@ class LogViewerFragment : Fragment() {
             setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         }
         
-        logLevelSpinner.adapter = adapter
-        logLevelSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+        logLevelSpinner?.adapter = adapter
+        logLevelSpinner?.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
                 currentLogLevel = logLevels[position]
                 refreshLogs()
@@ -78,14 +105,14 @@ class LogViewerFragment : Fragment() {
     }
     
     private fun setupScrolling() {
-        logTextView.setOnKeyListener { _, keyCode, event ->
+        logTextView?.setOnKeyListener { _, keyCode, event ->
             when (keyCode) {
                 android.view.KeyEvent.KEYCODE_DPAD_DOWN -> {
-                    scrollView.arrowScroll(View.FOCUS_DOWN)
+                    scrollView?.arrowScroll(View.FOCUS_DOWN)
                     true
                 }
                 android.view.KeyEvent.KEYCODE_DPAD_UP -> {
-                    scrollView.arrowScroll(View.FOCUS_UP)
+                    scrollView?.arrowScroll(View.FOCUS_UP)
                     true
                 }
                 else -> false
@@ -93,12 +120,125 @@ class LogViewerFragment : Fragment() {
         }
     }
     
+    private fun setupFontSizeButtons() {
+        increaseFontButton?.apply {
+            isFocusable = true
+            isFocusableInTouchMode = true
+            setMainImageDimensions(48, 48)
+            mainImageView.setImageResource(android.R.drawable.ic_menu_zoom)
+            titleText = "Increase Font"
+            
+            setOnClickListener {
+                changeFontSize(increase = true)
+            }
+            
+            onFocusChangeListener = View.OnFocusChangeListener { _, hasFocus ->
+                animate()
+                    .scaleX(if (hasFocus) 1.1f else 1.0f)
+                    .scaleY(if (hasFocus) 1.1f else 1.0f)
+                    .setDuration(150)
+                    .start()
+            }
+        }
+
+        decreaseFontButton?.apply {
+            isFocusable = true
+            isFocusableInTouchMode = true
+            setMainImageDimensions(48, 48)
+            mainImageView.setImageResource(android.R.drawable.ic_menu_revert)
+            titleText = "Decrease Font"
+            
+            setOnClickListener {
+                changeFontSize(increase = false)
+            }
+            
+            onFocusChangeListener = View.OnFocusChangeListener { _, hasFocus ->
+                animate()
+                    .scaleX(if (hasFocus) 1.1f else 1.0f)
+                    .scaleY(if (hasFocus) 1.1f else 1.0f)
+                    .setDuration(150)
+                    .start()
+            }
+        }
+    }
+
+    private fun changeFontSize(increase: Boolean) {
+        val newSize = if (increase) {
+            minOf(currentFontSize + 2f, maxFontSize)
+        } else {
+            maxOf(currentFontSize - 2f, minFontSize)
+        }
+        
+        if (newSize != currentFontSize) {
+            currentFontSize = newSize
+            logTextView?.textSize = currentFontSize
+            saveFontSize()
+            // Show feedback
+            Toast.makeText(context, "Font size: ${currentFontSize.toInt()}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun loadSavedFontSize() {
+        val prefs = requireContext().getSharedPreferences("LogViewer", Context.MODE_PRIVATE)
+        currentFontSize = prefs.getFloat("fontSize", 12f)
+        logTextView?.textSize = currentFontSize
+    }
+
+    private fun saveFontSize() {
+        val prefs = requireContext().getSharedPreferences("LogViewer", Context.MODE_PRIVATE)
+        prefs.edit().putFloat("fontSize", currentFontSize).apply()
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        // Cancel all coroutines
+        logUpdateJob.cancel()
+        
+        // Clear references
+        logTextView = null
+        logLevelSpinner = null
+        scrollView = null
+        clearLogsButton = null
+        increaseFontButton = null
+        decreaseFontButton = null
+        _binding = null
+        
+        // Clear any large data structures
+        System.gc()
+    }
+    
     private fun setupClearLogsButton() {
-        clearLogsButton.apply {
+        clearLogsButton?.apply {
+            isFocusable = true
+            isFocusableInTouchMode = true
+            
+            // Set card properties
             titleText = "Clear Logs"
             contentText = "Clear all log files"
             setMainImageDimensions(48, 48)
             mainImageView.setImageResource(android.R.drawable.ic_menu_delete)
+            
+            // Set focus change listener for visual feedback
+            onFocusChangeListener = View.OnFocusChangeListener { _, hasFocus ->
+                animate()
+                    .scaleX(if (hasFocus) 1.1f else 1.0f)
+                    .scaleY(if (hasFocus) 1.1f else 1.0f)
+                    .setDuration(150)
+                    .start()
+            }
+            
+            // Set key listener for better remote control handling
+            setOnKeyListener { _, keyCode, event ->
+                when {
+                    event.action == KeyEvent.ACTION_DOWN && 
+                    (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || 
+                     keyCode == KeyEvent.KEYCODE_ENTER) -> {
+                        performClick()
+                        true
+                    }
+                    else -> false
+                }
+            }
             
             setOnClickListener {
                 val dialog = GuidedStepSupportFragment.add(
@@ -128,6 +268,7 @@ class LogViewerFragment : Fragment() {
                 GuidedAction.Builder(requireContext())
                     .id(GuidedAction.ACTION_ID_OK)
                     .title("Clear")
+                    .checked(true)  // Makes this action selected by default
                     .build()
             )
             actions.add(
@@ -168,35 +309,54 @@ class LogViewerFragment : Fragment() {
     }
 
     private fun refreshLogs() {
-        lifecycleScope.launch(Dispatchers.IO) {
+        // Cancel any previous log update job
+        logUpdateJob.children.forEach { it.cancel() }
+        
+        logUpdateScope.launch(Dispatchers.IO) {
             try {
                 val logs = LogManager.readLogs(currentLogLevel)
+                
+                // Check if fragment is still active
+                if (!isAdded) return@launch
+                
                 withContext(Dispatchers.Main) {
-                    if (logs.isEmpty()) {
-                        logTextView.text = "No logs found for level: $currentLogLevel"
-                    } else {
-                        val spannableBuilder = SpannableStringBuilder()
-                        
-                        // Add log count header
-                        val headerText = "Showing ${logs.size} most recent logs (Level: $currentLogLevel)\n\n"
-                        spannableBuilder.append(headerText)
-                        
-                        // Add logs
-                        logs.forEachIndexed { index, log ->
-                            if (index > 0) spannableBuilder.append("\n")
-                            appendColoredLog(spannableBuilder, log)
-                        }
-                        logTextView.text = spannableBuilder
-                        // Scroll to bottom to show latest logs
-                        scrollView.post {
-                            scrollView.fullScroll(View.FOCUS_DOWN)
+                    logTextView?.let { textView ->
+                        if (logs.isEmpty()) {
+                            textView.text = "No logs found for level: $currentLogLevel"
+                        } else {
+                            val spannableBuilder = SpannableStringBuilder()
+                            
+                            // Add log count header
+                            val headerText = "Showing ${logs.size} most recent logs (Level: $currentLogLevel)\n\n"
+                            spannableBuilder.append(headerText)
+                            
+                            // Process logs in chunks to avoid memory spikes
+                            logs.chunked(10).forEach { chunk ->
+                                chunk.forEach { log ->
+                                    spannableBuilder.append("\n")
+                                    appendColoredLog(spannableBuilder, log)
+                                }
+                                // Allow UI to update between chunks
+                                yield()
+                            }
+                            
+                            // Clear any previous content before setting new text
+                            textView.text = ""
+                            textView.text = spannableBuilder
+                            
+                            // Scroll to bottom to show latest logs
+                            scrollView?.post {
+                                scrollView?.fullScroll(View.FOCUS_DOWN)
+                            }
                         }
                     }
                 }
             } catch (e: Exception) {
                 Timber.e("Error refreshing logs", e)
-                withContext(Dispatchers.Main) {
-                    logTextView.text = "Error loading logs: ${e.message}"
+                if (isAdded) {
+                    withContext(Dispatchers.Main) {
+                        logTextView?.text = "Error loading logs: ${e.message}"
+                    }
                 }
             }
         }

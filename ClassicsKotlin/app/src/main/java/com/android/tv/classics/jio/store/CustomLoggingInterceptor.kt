@@ -62,6 +62,10 @@ class CustomLoggingInterceptor : Interceptor {
             
             // Add headers
             for (name in request.headers.names()) {
+                if (name.equals("accesstoken", ignoreCase = true)) {
+                    curlCmd.append(" -H '${name}: REDACTED'")
+                    continue
+                }
                 curlCmd.append(" -H '${name}: ${request.headers[name]}'")
             }
 

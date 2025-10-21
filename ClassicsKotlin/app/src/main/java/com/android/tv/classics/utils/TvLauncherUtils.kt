@@ -417,7 +417,7 @@ class TvLauncherUtils private constructor() {
                                         val authToken = response.getJSONObject("data").getString("authToken")
                                         updatedHeaders["authToken"] = authToken
                                         LiveTvApplication.setAuthHeaders(updatedHeaders)
-                                        Timber.d("Refreshed Token [$authToken] and updated [${LiveTvApplication.getAuthHeaders()["authToken"]}]")
+                                        Timber.d("Refreshed Token and updated")
                                     } else {
                                         Timber.d("No auth token in response")
                                     }
