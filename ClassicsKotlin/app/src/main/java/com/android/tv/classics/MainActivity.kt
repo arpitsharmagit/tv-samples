@@ -27,6 +27,7 @@ import android.view.WindowManager
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
+import androidx.leanback.app.GuidedStepSupportFragment
 import androidx.navigation.Navigation
 import com.android.tv.classics.databinding.ActivityMainBinding
 import com.android.tv.classics.fragments.LeanbackUpdateDialogFragment
@@ -37,7 +38,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.lifecycle.lifecycleScope
+import com.android.tv.classics.auth.GoogleSignInStepFragment
 import com.android.tv.classics.utils.FocusManager
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.GoogleAuthProvider
 import timber.log.Timber
 
 /** Entry point for the Android TV application */
@@ -45,6 +49,8 @@ class MainActivity : FragmentActivity() {
     companion object {
         private val TAG = MainActivity::class.java.simpleName
         private const val PERMISSION_REQUEST_CODE = 100
+        private lateinit var auth: FirebaseAuth
+        private lateinit var authStateListener: FirebaseAuth.AuthStateListener
     }
 
     private lateinit var binding: ActivityMainBinding
@@ -52,6 +58,9 @@ class MainActivity : FragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        auth = FirebaseAuth.getInstance()
+        setupAuthStateListener()
 
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
@@ -67,7 +76,7 @@ class MainActivity : FragmentActivity() {
         // Check for updates
         // checkForAppUpdates()
 
-        handleIntent(intent)
+
 
         // NOTE: It's very important to keep our api token fresh
 //        WorkManager.getInstance(baseContext).enqueue(
@@ -108,7 +117,76 @@ class MainActivity : FragmentActivity() {
             }
         }
     }
-    
+
+    /**
+     * Sets up the listener to monitor changes in the user's authentication state.
+     */
+    private fun setupAuthStateListener() {
+        authStateListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
+            val user = firebaseAuth.currentUser
+
+            // Check if the user is signed in AND is NOT an anonymous user (promoted to Google)
+            val isGoogleSignedIn = user != null && user.providerData.any { it.providerId == GoogleAuthProvider.PROVIDER_ID }
+
+            if (isGoogleSignedIn) {
+                // User is fully authenticated via Google. Proceed to main content.
+                Timber.d( "User ${user?.uid} signed in with Google. Showing main content.")
+                showMainContent()
+            } else {
+                // User is either null (not signed in) or only anonymously signed in.
+                // We show the GuidedStepSupportFragment to prompt for Google Sign-In.
+                Timber.d( "User is not fully signed in. Showing authentication flow.")
+                showAuthFragment()
+            }
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        // Attach the listener when the activity starts
+        auth.addAuthStateListener(authStateListener)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        // Detach the listener when the activity stops to prevent memory leaks
+        auth.removeAuthStateListener(authStateListener)
+    }
+
+    /**
+     * Displays the main content fragment (e.g., the BrowseSupportFragment).
+     * This is called only when the user is successfully signed in via Google.
+     */
+    private fun showMainContent() {
+
+        // Dismiss any GuidedStepSupportFragments (auth screen) if they are currently visible
+        supportFragmentManager.findFragmentByTag("AUTH_STEP")?.let { fragment ->
+            supportFragmentManager.beginTransaction().remove(fragment).commitNow()
+        }
+
+        // Check if the main content is already loaded to avoid recreation
+        if (supportFragmentManager.findFragmentByTag("MAIN_CONTENT") == null) {
+            handleIntent(intent)
+        }
+    }
+
+    /**
+     * Displays the Google Sign-In GuidedStepSupportFragment.
+     */
+    private fun showAuthFragment() {
+        // Check if the GuidedStepSupportFragment is already showing
+        if (supportFragmentManager.findFragmentByTag("AUTH_STEP") == null) {
+            val authStepFragment = GoogleSignInStepFragment()
+
+            // Use GuidedStepSupportFragment.add() to display it modally on top of existing content
+            GuidedStepSupportFragment.add(
+                supportFragmentManager,
+                authStepFragment,
+                R.id.fragment_container
+            )
+        }
+    }
+
     /**
      * Handle permission request results
      */

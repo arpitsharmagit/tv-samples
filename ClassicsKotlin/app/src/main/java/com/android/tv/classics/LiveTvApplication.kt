@@ -2,26 +2,18 @@ package com.android.tv.classics
 
 import android.app.Application
 import android.content.Context
-import android.util.Log
 import android.widget.Toast
-import androidx.annotation.NonNull
-import androidx.lifecycle.LifecycleCoroutineScope
-import timber.log.Timber
-import com.android.tv.classics.utils.FileLoggingTree
 import com.android.tv.classics.jio.store.HttpStore
 import com.android.tv.classics.jio.store.PrefStore
+import com.android.tv.classics.utils.ApplicationContextProvider
+import com.android.tv.classics.utils.FileLoggingTree
 import com.android.tv.classics.utils.FirebaseAuthManager
-import com.android.tv.classics.utils.TvLauncherUtils
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import com.androidnetworking.AndroidNetworking
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.DatabaseReference
-import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ValueEventListener
-import com.android.tv.classics.utils.ApplicationContextProvider
+import timber.log.Timber
 
 class LiveTvApplication : Application() {
     companion object {
@@ -62,7 +54,7 @@ class LiveTvApplication : Application() {
         
         fun getCloudDatabase(): DatabaseReference {
             // Use the authenticated database reference through the FirebaseAuthManager
-            return com.android.tv.classics.utils.FirebaseAuthManager.getUserDatabaseRef()
+            return FirebaseAuthManager.getUserDatabaseRef()
         }
         
         fun setMobileNumber(newMobileNumber: String?) {
@@ -161,9 +153,7 @@ class LiveTvApplication : Application() {
         prefStore.saveData("mobileNumber", "9310949577")
         // start httpstore
         // initialise APIs
-        if (getMobileNumber() != null) {
-            // Authenticate with Firebase (anonymous auth) before accessing database
-            FirebaseAuthManager.signInAnonymously()
+        if (getMobileNumber() != null) {            
             initCloudSettings()
         }
     }
