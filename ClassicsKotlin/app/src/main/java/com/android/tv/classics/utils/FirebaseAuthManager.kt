@@ -19,7 +19,22 @@ object FirebaseAuthManager {
     
     private val auth: FirebaseAuth = FirebaseAuth.getInstance()
     private var currentUser: FirebaseUser? = null
-    
+
+    // Add interface for auth state changes
+    interface AuthStateListener {
+        fun onAuthStateChanged(isAuthenticated: Boolean)
+    }
+
+    private val authStateListeners = mutableListOf<AuthStateListener>()
+
+    fun addAuthStateListener(listener: AuthStateListener) {
+        authStateListeners.add(listener)
+    }
+
+    fun removeAuthStateListener(listener: AuthStateListener) {
+        authStateListeners.remove(listener)
+    }
+
     /**
      * Initialize Firebase auth when app starts
      */
@@ -27,8 +42,16 @@ object FirebaseAuthManager {
         currentUser = auth.currentUser
         // Listen for auth state changes
         auth.addAuthStateListener { firebaseAuth ->
+            val wasAuthenticated = currentUser != null
             currentUser = firebaseAuth.currentUser
-            Timber.d("Auth state changed. User logged in: ${currentUser != null}")
+            val isAuthenticated = currentUser != null
+
+            Timber.d("Auth state changed. User logged in: $isAuthenticated")
+
+            // Notify listeners only when authentication state actually changes
+            if (wasAuthenticated != isAuthenticated) {
+                authStateListeners.forEach { it.onAuthStateChanged(isAuthenticated) }
+            }
         }
     }
     

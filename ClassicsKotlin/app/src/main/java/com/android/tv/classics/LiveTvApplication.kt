@@ -22,8 +22,15 @@ class LiveTvApplication : Application() {
         private lateinit var httpStore: HttpStore
         private lateinit var prefStore: PrefStore
         private var instance: LiveTvApplication? = null
-
         private var authHeaders: Map<String, Any>? = null
+
+        private val authStateListener = object : FirebaseAuthManager.AuthStateListener {
+            override fun onAuthStateChanged(isAuthenticated: Boolean) {
+                if (isAuthenticated && getMobileNumber() != null) {
+                    initCloudSettings()
+                }
+            }
+        }
 
         fun getInstance(): LiveTvApplication {
             return instance ?: LiveTvApplication().also { instance = it }
@@ -63,7 +70,7 @@ class LiveTvApplication : Application() {
             if (mobileNumber != null) {
                 // Associate the mobile number with the Firebase user
                 FirebaseAuthManager.setUserMetadata(mobileNumber!!)
-                initCloudSettings()
+//                initCloudSettings()
             }
         }
 
@@ -148,13 +155,14 @@ class LiveTvApplication : Application() {
         AndroidNetworking.initialize(applicationContext, HttpStore.getHttpClient())
 
         // Initialize Firebase Auth Manager
+        FirebaseAuthManager.addAuthStateListener(authStateListener)
         FirebaseAuthManager.init()
         
         prefStore.saveData("mobileNumber", "9310949577")
         // start httpstore
         // initialise APIs
-        if (getMobileNumber() != null) {            
-            initCloudSettings()
-        }
+//        if (getMobileNumber() != null) {
+//            initCloudSettings()
+//        }
     }
 }
