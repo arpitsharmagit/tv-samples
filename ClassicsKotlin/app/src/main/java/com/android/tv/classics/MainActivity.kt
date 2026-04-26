@@ -260,14 +260,15 @@ class MainActivity : FragmentActivity() {
                 .isNotEmpty()
         ){
             Timber.d("Mobile No. "+ LiveTvApplication.getMobileNumber()+ " AuthHeaders Found.")
+            // Navigate immediately — don't block on token refresh
+            Navigation.findNavController(activity, R.id.fragment_container)
+                .navigate(NavGraphDirections.actionToMediaBrowser())
             lifecycleScope.launch {
                 try {
                     TvLauncherUtils.refreshToken()
                 } catch (e: Exception) {
                     Timber.e( "Error refreshing token", e)
                 }
-                Navigation.findNavController(activity, R.id.fragment_container)
-                    .navigate(NavGraphDirections.actionToMediaBrowser())
             }
         } else {
             Navigation.findNavController(activity, R.id.fragment_container)

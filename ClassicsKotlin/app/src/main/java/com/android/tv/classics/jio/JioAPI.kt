@@ -109,10 +109,11 @@ object JioAPI {
         }
     }
 
-    suspend fun getHeaderCookie(playbackUrl: String, authHeaders: Map<String, Any>): String = withContext(Dispatchers.IO) {
+    suspend fun getHeaderCookie(playbackUrl: String, channelId: String, authHeaders: Map<String, Any>): String = withContext(Dispatchers.IO) {
         val additionalHeaders = hashMapOf(
             Constants.ACCESS_TOKEN to getStringValue(authHeaders, "authToken"),
             Constants.APP_KEY to getStringValue(authHeaders, "appkey"),
+            Constants.CHANNEL_ID to channelId,
             Constants.CRM_ID to getStringValue(authHeaders, "crmid"),
             Constants.DEVICE_ID to getStringValue(authHeaders, "deviceId"),
             Constants.SESSIONID to getStringValue(authHeaders, "uniqueId"),
@@ -137,7 +138,10 @@ object JioAPI {
 
         val response = request.executeForOkHttpResponse()
         if (response.isSuccess) {
-            response.okHttpResponse.header("set-cookie") ?: ""
+            // set-cookie is e.g. "name=value; Path=/; Domain=..." — only "name=value" is valid
+            // as a Cookie request header (everything after ";" are cookie attributes)
+            val raw = response.okHttpResponse.header("set-cookie") ?: ""
+            raw.substringBefore(";").trim()
         } else {
             ""
         }

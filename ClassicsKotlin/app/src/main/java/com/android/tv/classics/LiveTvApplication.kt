@@ -161,8 +161,8 @@ class LiveTvApplication : Application() {
         prefStore.saveData("mobileNumber", "9310949577")
         // start httpstore
         // initialise APIs
-//        if (getMobileNumber() != null) {
-//            initCloudSettings()
-//        }
+        if (getMobileNumber() != null) {
+            initCloudSettings()
+        }
     }
 }

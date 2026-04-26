@@ -61,7 +61,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.withContext
 import timber.log.Timber
-import java.util.concurrent.TimeUnit
 
 /**
  * A fragment that lets user browse our collection of metadata.
@@ -79,6 +78,9 @@ class MediaBrowserFragment : BrowseSupportFragment() {
 
     /** Background for our fragment, selected randomly at runtime */
     private lateinit var backgroundDrawable: Deferred<Drawable>
+
+    /** Job used to debounce background tint updates on d-pad navigation */
+    private var selectionJob: Job? = null
 
     /** Job used to synchronize our media database */
     private lateinit var synchronizeJob: Job
@@ -112,28 +114,23 @@ class MediaBrowserFragment : BrowseSupportFragment() {
         // Setup this browser fragment's adapter
         adapter = ArrayObjectAdapter(ListRowPresenter())
 
-        // Each time an item is selected, change the background
+        // Each time an item is selected, debounce then change the background
         setOnItemViewSelectedListener { _, item, _, row ->
             if (item == null) return@setOnItemViewSelectedListener
             val metadata = item as TvMediaMetadata
-            //Timber.d("Row selected: ${row.id}. Item selected: ${metadata.id}")
 
-            // Launch the background tint update task in a coroutine
-            lifecycleScope.launch(Dispatchers.IO) {
+            // Cancel pending palette job so rapid d-pad scrolling doesn't queue up downloads
+            selectionJob?.cancel()
+            selectionJob = lifecycleScope.launch(Dispatchers.IO) {
+                kotlinx.coroutines.delay(300)
                 metadata.artUri?.let { artUri ->
                     Coil.get(artUri) { allowHardware(false) }.toBitmap()
-                }?.let {  artBitmap ->
+                }?.let { artBitmap ->
                     Palette.Builder(artBitmap).generate {
-
-                        // Extract dominant color from the generated palette
                         val dominantColor =
                                 it?.getDominantColor(currentTintColor) ?: currentTintColor
-
-                        // Modify color's alpha channel to make it partly transparent
                         val backgroundColor =
                                 ColorUtils.setAlphaComponent(dominantColor, BACKGROUND_TINT_ALPHA)
-
-                        // Set the partly transparent dominant color as the background tint
                         Timber.d("Using dominant color for background tint: $backgroundColor")
                         updateBackgroundTint(backgroundColor)
                     }
@@ -260,19 +257,14 @@ class MediaBrowserFragment : BrowseSupportFragment() {
         val rowCount = adapter.size()
 
         val collections = database.collections().findAll()
+        // Single query for all metadata, then group in memory (avoids N+1 DB queries)
+        val metadataByCollection = database.metadata().findAll().groupBy { it.collectionId }
+
         val collectionRows = collections.mapIndexed { idx, collection ->
-
-            // Create header for each album
             val header = HeaderItem(idx.toLong(), collection.title)
-
-            // Create corresponding row adapter for the album's songs
             val listRowAdapter = ArrayObjectAdapter(TvMediaMetadataPresenter()).apply {
-
-                // Add all the collection's metadata to the row's adapter
-                setItems(database.metadata().findByCollection(collection.id), null)
+                setItems(metadataByCollection[collection.id] ?: emptyList<TvMediaMetadata>(), null)
             }
-
-            // Add a list row for the <header, row adapter> pair
             ListRow(header, listRowAdapter)
         }.toMutableList()
 
@@ -311,6 +303,8 @@ class MediaBrowserFragment : BrowseSupportFragment() {
     }
 
     override fun onDestroyView() {
+        selectionJob?.cancel()
+        selectionJob = null
         // Cancel animation and remove any pending callbacks
         view?.let { view ->
             backgroundAnimation?.let { view.removeCallbacks(it) }
@@ -345,7 +339,7 @@ class MediaBrowserFragment : BrowseSupportFragment() {
         private val TAG = MediaBrowserFragment::class.java.simpleName
 
         /** Animation time in milliseconds for background changes */
-        private val BACKGROUND_ANIMATION_MILLIS: Long = TimeUnit.SECONDS.toMillis(1)
+        private val BACKGROUND_ANIMATION_MILLIS: Long = 300L
 
         /** Alpha component (0-255) of the background color tint */
         private const val BACKGROUND_TINT_ALPHA: Int = 150

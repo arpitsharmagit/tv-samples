@@ -19,7 +19,6 @@ package com.android.tv.classics.fragments
 import android.content.Context
 import android.graphics.Color
 import android.net.Uri
-import android.os.Build
 import android.os.Bundle
 import android.support.v4.media.session.MediaSessionCompat
 import android.util.Log
@@ -50,11 +49,17 @@ import com.android.tv.classics.workers.mapObject
 import com.androidnetworking.error.ANError
 import com.androidnetworking.interfaces.JSONObjectRequestListener
 import com.google.android.exoplayer2.*
+import com.google.android.exoplayer2.C
+import com.google.android.exoplayer2.drm.DefaultDrmSessionManager
+import com.google.android.exoplayer2.drm.FrameworkMediaDrm
+import com.google.android.exoplayer2.drm.HttpMediaDrmCallback
 import com.google.android.exoplayer2.ext.leanback.LeanbackPlayerAdapter
 import com.google.android.exoplayer2.ext.mediasession.MediaSessionConnector
 import com.google.android.exoplayer2.source.MediaSource
+import com.google.android.exoplayer2.source.dash.DashMediaSource
 import com.google.android.exoplayer2.source.hls.HlsMediaSource
 import com.google.android.exoplayer2.upstream.*
+import com.google.android.exoplayer2.upstream.DefaultHttpDataSourceFactory
 import com.google.android.exoplayer2.util.EventLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -259,42 +264,98 @@ class NowPlayingFragment : VideoSupportFragment() {
             )
             // blocking I/O operation
             val response = JioAPI.getPlaybackUrl(body, authHeaders)
-            metadata.contentUri = Uri.parse(response.getString("result"))
 
-            val hashMap = HashMap<String, String>()
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                // Use the helper function to safely get string values from authHeaders
-                val getStringValue = { key: String -> 
-                    when (val value = authHeaders[key]) {
-                        is String -> value
-                        null -> ""
-                        else -> value.toString()
+            // Parse HLS URL (top-level "result" field)
+            val hlsUrl = response.optString("result").takeIf { it.isNotEmpty() }
+
+            // Parse DASH/MPD URL — API may nest it under "dash", "mpd", "dashUrl", or "mpdUrl"
+            var dashUrl: String? = null
+            var dashKeyUrl: String? = null
+            for (dashKey in listOf("dash", "mpd", "dashUrl", "mpdUrl")) {
+                if (!response.has(dashKey)) continue
+                val raw = response.get(dashKey)
+                when {
+                    raw is org.json.JSONObject -> {
+                        dashUrl = raw.optString("result").takeIf { it.isNotEmpty() }
+                        dashKeyUrl = raw.optString("key").takeIf { it.isNotEmpty() }
                     }
+                    raw is String && raw.isNotEmpty() -> dashUrl = raw
                 }
-                
-                hashMap[Constants.UNIQUE_ID] = getStringValue("uniqueId")
-                hashMap[Constants.SSO_TOKEN] = getStringValue("ssotoken")
-                hashMap[Constants.SUBSCRIBER_ID] = getStringValue("crmid")
-                hashMap[Constants.DEVICE_ID] = getStringValue("deviceId")
-                hashMap[Constants.OS] = Constants.VALUES.OS
-                hashMap[Constants.USER_ID] = getStringValue("userId")
-                hashMap[Constants.OS_VERSION] = Constants.VALUES.OS_VERSION
-                hashMap[Constants.VERSION_CODE] = Constants.VALUES.VERSION_CODE
-                hashMap[Constants.CRM_ID] = getStringValue("crmid")
-                hashMap[Constants.SRNO] = metadata.id
-                hashMap[Constants.CHANNEL_ID] = metadata.id
-                hashMap[Constants.DEVICE_TYPE] = "phone"
-                hashMap[Constants.USER_GROUP] = getStringValue("usergroup")
-                hashMap[Constants.ACCESS_TOKEN] = getStringValue("authToken")
+                if (dashUrl != null) break
             }
 
-            val playbackCookie = JioAPI.getHeaderCookie(response.getString("result"), authHeaders)
-            hashMap["Cookie"] = playbackCookie
+            val isDRM = response.optBoolean("isDRM", false)
+            val requiresDrm = isDRM || !dashKeyUrl.isNullOrEmpty()
+
+            // DASH is preferred over HLS when available (matches Flutter PlaybackResult.preferredUrl)
+            val isDash = dashUrl != null
+            val chosenUrl = dashUrl ?: hlsUrl ?: run {
+                Timber.e("No playback URL in response: $response")
+                return@startPlayingCurrentShow
+            }
+
+            metadata.contentUri = Uri.parse(chosenUrl)
+            Timber.d("Playback format: ${if (isDash) "DASH" else "HLS"}  isDRM=$requiresDrm  url=$chosenUrl")
+
+            // Build CDN stream headers — mirrors Flutter PlayerProvider._buildStreamHeaders()
+            val getStr = { key: String ->
+                when (val v = authHeaders[key]) {
+                    is String -> v
+                    null -> ""
+                    else -> v.toString()
+                }
+            }
+            val hashMap = hashMapOf(
+                Constants.ACCESS_TOKEN  to getStr("authToken"),
+                Constants.APP_KEY       to getStr("appkey"),
+                Constants.CHANNEL_ID    to metadata.id,
+                Constants.CRM_ID        to getStr("crmid"),
+                Constants.DEVICE_ID     to getStr("deviceId"),
+                Constants.SESSIONID     to getStr("uniqueId"),   // "sid"
+                Constants.SUBSCRIBER_ID to getStr("crmid"),
+                Constants.UNIQUE_ID     to getStr("uniqueId"),
+                Constants.USER_GROUP    to getStr("usergroup"),
+                Constants.USER_ID       to getStr("userId"),
+                Constants.VERSION_CODE  to Constants.VALUES.VERSION_CODE,
+                Constants.DM           to Constants.VALUES.DM,
+                Constants.OTT_USER     to "false",
+                Constants.LANGUAGE_ID  to Constants.VALUES.LANGUAGE_ID,
+                Constants.LBCOOKIES    to Constants.VALUES.LBCOOKIES,
+                Constants.OS_VERSION   to Constants.VALUES.OS_VERSION
+            )
+
+            // Fetch CDN auth cookie (strip Set-Cookie attributes, keep only "name=value")
+            val playbackCookie = JioAPI.getHeaderCookie(chosenUrl, metadata.id, authHeaders)
+            if (playbackCookie.isNotEmpty()) hashMap["Cookie"] = playbackCookie
+
+            // Build Widevine DRM license request headers — mirrors Flutter _buildLicenseHeaders()
+            val drmLicenseHeaders: Map<String, String> = if (requiresDrm && !dashKeyUrl.isNullOrEmpty()) {
+                hashMapOf(
+                    "uniqueId"     to getStr("uniqueId"),
+                    "ssotoken"     to getStr("ssotoken"),
+                    "accesstoken"  to getStr("authToken"),
+                    "subscriberId" to getStr("crmid"),
+                    "deviceId"     to getStr("deviceId"),
+                    "os"           to Constants.VALUES.OS,
+                    "userId"       to getStr("userId"),
+                    "versionCode"  to Constants.VALUES.VERSION_CODE,
+                    "osVersion"    to Constants.VALUES.OS_VERSION,
+                    "crmid"        to getStr("crmid"),
+                    "srno"         to srNo,
+                    "channelid"    to metadata.id,
+                    "devicetype"   to "phone",
+                    "usergroup"    to Constants.VALUES.USER_GROUP,
+                    "lbcookie"     to Constants.VALUES.LBCOOKIES,
+                    "appkey"       to Constants.VALUES.APP_KEY
+                )
+            } else emptyMap()
 
             withContext(Dispatchers.Main) {
                 increasePlayCount()
-                // Prepares metadata playback
-                val mediaSource = prepareMediaSource(metadata.contentUri, hashMap)
+                // Prepares metadata playback — DASH or HLS depending on chosen URL
+                val mediaSource = prepareMediaSource(
+                    metadata.contentUri, hashMap, isDash, dashKeyUrl, drmLicenseHeaders
+                )
                 player.prepare(mediaSource, false, true)
 
                 val subTitleFormat = SimpleDateFormat("EEE dd MMM HH:mm a", Locale.US)
@@ -325,7 +386,13 @@ class NowPlayingFragment : VideoSupportFragment() {
         return currentShow
     }
 
-    private fun prepareMediaSource(playbackUri: Uri, playbackHeaders: Map<String, String>): HlsMediaSource {
+    private fun prepareMediaSource(
+        playbackUri: Uri,
+        playbackHeaders: Map<String, String>,
+        isDash: Boolean = false,
+        drmLicenseUrl: String? = null,
+        drmLicenseHeaders: Map<String, String> = emptyMap()
+    ): MediaSource {
         // Use DefaultHttpDataSource.Factory as the base
         val defaultHttpDataSourceFactory = DefaultHttpDataSource.Factory().apply {
             defaultRequestProperties.set(playbackHeaders)
@@ -346,9 +413,29 @@ class NowPlayingFragment : VideoSupportFragment() {
             }
         )
 
-        // Create the HlsMediaSource
-        return HlsMediaSource.Factory(resolvingDataSourceFactory)
-            .createMediaSource(MediaItem.fromUri(playbackUri))
+        return if (isDash) {
+            val dashFactory = DashMediaSource.Factory(resolvingDataSourceFactory)
+
+            // Configure Widevine DRM when a license URL is present
+            if (!drmLicenseUrl.isNullOrEmpty()) {
+                Timber.d("Configuring Widevine DRM — license: $drmLicenseUrl")
+                val drmCallback = HttpMediaDrmCallback(
+                    drmLicenseUrl,
+                    DefaultHttpDataSourceFactory("okhttp/4.0.1")
+                )
+                drmLicenseHeaders.forEach { (k, v) -> drmCallback.setKeyRequestProperty(k, v) }
+                val drmSessionManager = DefaultDrmSessionManager.Builder()
+                    .setUuidAndExoMediaDrmProvider(C.WIDEVINE_UUID, FrameworkMediaDrm.DEFAULT_PROVIDER)
+                    .build(drmCallback)
+                dashFactory.setDrmSessionManager(drmSessionManager)
+            }
+
+            dashFactory.createMediaSource(MediaItem.fromUri(playbackUri))
+        } else {
+            // HLS (M3U8) stream — fallback when no DASH URL is available
+            HlsMediaSource.Factory(resolvingDataSourceFactory)
+                .createMediaSource(MediaItem.fromUri(playbackUri))
+        }
     }
 
     /** Updates last know playback position */
