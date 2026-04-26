@@ -717,8 +717,12 @@ class NowPlayingFragment : VideoSupportFragment() {
         mediaSessionConnector.setPlayer(player)
         mediaSession.isActive = true
 
-        // Kick off metadata update task which runs periodically in the main thread
-        //view?.postDelayed(updateMetadataTask, METADATA_UPDATE_INTERVAL_MILLIS)
+        // Live stream URLs carry short-lived tokens (~2 min); re-fetch stream on every resume
+        if (::shows.isInitialized && shows.isNotEmpty()) {
+            lifecycleScope.launch(Dispatchers.IO) {
+                startPlayingCurrentShow(findCurrentShow())
+            }
+        }
     }
 
     /**
@@ -729,6 +733,9 @@ class NowPlayingFragment : VideoSupportFragment() {
         super.onPause()
 
         try {
+            // Save last playing channel so MainActivity can auto-resume after process death
+            LiveTvApplication.getPrefStore().saveData("lastChannelId", metadata.id)
+
             // Pause the player
             playerGlue.pause()
             

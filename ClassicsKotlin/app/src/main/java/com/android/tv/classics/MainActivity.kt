@@ -55,6 +55,8 @@ class MainActivity : FragmentActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var appUpdateManager: AppUpdateManager
+    /** True after we've navigated to content for the first time (guards against re-nav on resume) */
+    private var hasShownContent = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -224,6 +226,20 @@ class MainActivity : FragmentActivity() {
     private fun handleIntent(intent: Intent) {
         val activity = this
         val db = TvMediaDatabase.getInstance(this)
+
+        // Guard: if we've already shown content (e.g. app resumed from Home button),
+        // don't re-navigate — the existing fragment back stack is still valid.
+        if (hasShownContent) {
+            val currentDestId = try {
+                Navigation.findNavController(activity, R.id.fragment_container)
+                    .currentDestination?.id
+            } catch (e: Exception) { null }
+            if (currentDestId == R.id.media_browser_fragment ||
+                currentDestId == R.id.now_playing_fragment) {
+                Timber.d("App resumed from background, keeping current destination")
+                return
+            }
+        }
         
         // Navigates to other fragments based on Intent's action
         // [MainActivity] is the main entry point for all intent filters
@@ -256,11 +272,13 @@ class MainActivity : FragmentActivity() {
 
                 else -> Timber.w( "VIEW intent received but unrecognized URI: $uri")
             }
+            hasShownContent = true
         } else if(LiveTvApplication.getMobileNumber() !=null && LiveTvApplication.getAuthHeaders()
                 .isNotEmpty()
         ){
             Timber.d("Mobile No. "+ LiveTvApplication.getMobileNumber()+ " AuthHeaders Found.")
-            // Navigate immediately — don't block on token refresh
+            hasShownContent = true
+            // Navigate to browser immediately — don't block on token refresh
             Navigation.findNavController(activity, R.id.fragment_container)
                 .navigate(NavGraphDirections.actionToMediaBrowser())
             lifecycleScope.launch {
@@ -268,6 +286,20 @@ class MainActivity : FragmentActivity() {
                     TvLauncherUtils.refreshToken()
                 } catch (e: Exception) {
                     Timber.e( "Error refreshing token", e)
+                }
+            }
+            // Auto-resume last playing channel if one was saved
+            val lastChannelId = LiveTvApplication.getPrefStore().getData("lastChannelId")
+            if (lastChannelId != null) {
+                Timber.d("Resuming last channel: $lastChannelId")
+                lifecycleScope.launch {
+                    val metadata = withContext(Dispatchers.IO) { db.metadata().findById(lastChannelId) }
+                    if (metadata != null) {
+                        withContext(Dispatchers.Main) {
+                            Navigation.findNavController(activity, R.id.fragment_container)
+                                .navigate(NavGraphDirections.actionToNowPlaying(metadata))
+                        }
+                    }
                 }
             }
         } else {
