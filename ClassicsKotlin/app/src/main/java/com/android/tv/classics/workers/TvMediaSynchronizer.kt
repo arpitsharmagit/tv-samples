@@ -152,71 +152,69 @@ class TvMediaSynchronizer(private val context: Context, params: WorkerParameters
                             return@runBlocking
                         }
     
-                        // Gets a list of the metadata IDs for comparisons
-                        val metadataIdList = feed.metadata.map { it.id }
-    
+                        // Gets a set of incoming metadata IDs for O(1) lookups
+                        val metadataIdSet = feed.metadata.map { it.id }.toSet()
+
+                        // Load all existing DB data once — reused for both delete and insert checks
+                        val existingMetadata = database.metadata().findAll()
+                        val existingMetadataIds = existingMetadata.map { it.id }.toSet()
+
                         try {
-                            // Deletes items in our database that have been deleted from the metadata feed
-                            // NOTE: It's important to keep the things added to the TV launcher in sync
-                            database.metadata().findAll()
-                                .filter { !metadataIdList.contains(it.id) }
-                                .forEach {
+                            // Batch delete channels that were removed from the feed
+                            val toDelete = existingMetadata.filter { it.id !in metadataIdSet }
+                            if (toDelete.isNotEmpty()) {
+                                database.metadata().deleteAll(toDelete)
+                                toDelete.forEach {
                                     try {
-                                        database.metadata().delete(it)
-                                        // Removes programs from TV launcher
                                         TvLauncherUtils.removeProgram(context, it)
                                         TvLauncherUtils.removeFromWatchNext(context, it)
                                     } catch (e: Exception) {
-                                        Timber.e( "Error removing metadata: ${it.id}", e)
+                                        Timber.e("Error removing from launcher: ${it.id}", e)
                                     }
                                 }
+                            }
                         } catch (e: Exception) {
-                            Timber.e( "Error processing metadata deletions", e)
+                            Timber.e("Error processing metadata deletions", e)
                         }
-                        
+
                         try {
-                            database.collections().findAll()
-                                .filter { !feed.collections.contains(it) }
-                                .forEach {
-                                    try {
-                                        database.collections().delete(it)
-                                        TvLauncherUtils.removeChannel(context, it)
-                                    } catch (e: Exception) {
-                                        Timber.e( "Error removing collection: ${it.id}", e)
-                                    }
+                            // Batch delete collections removed from feed
+                            val feedCollectionIds = feed.collections.map { it.id }.toSet()
+                            val existingCollectionIds = database.collections().findAllIds().toSet()
+                            val toDeleteCollections = existingCollectionIds
+                                .filter { it !in feedCollectionIds }
+                                .mapNotNull { database.collections().findById(it) }
+                            toDeleteCollections.forEach {
+                                try {
+                                    database.collections().delete(it)
+                                    TvLauncherUtils.removeChannel(context, it)
+                                } catch (e: Exception) {
+                                    Timber.e("Error removing collection: ${it.id}", e)
                                 }
+                            }
                         } catch (e: Exception) {
-                            Timber.e( "Error processing collection deletions", e)
+                            Timber.e("Error processing collection deletions", e)
                         }
-    
-                        // Insert new channels
+
                         try {
-                            val dbChannels = database.metadata().findAll().map { it.id }
-                            feed.metadata.filter { !dbChannels.contains(it.id) }
-                                .forEach {
-                                    try {
-                                        database.metadata().insert(it)
-                                    } catch (e: Exception) {
-                                        Timber.e( "Error inserting metadata: ${it.id}", e)
-                                    }
-                                }
+                            // Batch insert new channels (preserves existing user state like favorite/hidden)
+                            val toInsert = feed.metadata.filter { it.id !in existingMetadataIds }
+                            if (toInsert.isNotEmpty()) {
+                                database.metadata().insert(*toInsert.toTypedArray())
+                            }
                         } catch (e: Exception) {
-                            Timber.e( "Error inserting new metadata", e)
+                            Timber.e("Error inserting new metadata", e)
                         }
-    
-                        // Insert new collections
+
                         try {
-                            val dbCollections = database.collections().findAll().map { it.id }
-                            feed.collections.filter { !dbCollections.contains(it.id) }
-                                .forEach {
-                                    try {
-                                        database.collections().insert(it)
-                                    } catch (e: Exception) {
-                                        Timber.e( "Error inserting collection: ${it.id}", e)
-                                    }
-                                }
+                            // Batch insert new collections
+                            val existingCollectionIds = database.collections().findAllIds().toSet()
+                            val toInsertCollections = feed.collections.filter { it.id !in existingCollectionIds }
+                            if (toInsertCollections.isNotEmpty()) {
+                                database.collections().insert(*toInsertCollections.toTypedArray())
+                            }
                         } catch (e: Exception) {
-                            Timber.e( "Error inserting new collections", e)
+                            Timber.e("Error inserting new collections", e)
                         }
                     } catch (e: Exception) {
                         Timber.e( "Error in synchronization process", e)

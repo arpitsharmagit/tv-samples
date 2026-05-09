@@ -56,6 +56,9 @@ interface TvMediaCollectionDAO {
     @Query("SELECT * FROM tvmediacollection where id in (5,6,7,8,9,10,12,13,15,16) ORDER BY orderBy ASC")
     fun findAll(): List<TvMediaCollection>
 
+    @Query("SELECT id FROM tvmediacollection")
+    fun findAllIds(): List<String>
+
     @Query("SELECT * FROM tvmediacollection WHERE id LIKE :id LIMIT 1")
     fun findById(id: String): TvMediaCollection?
 

@@ -1,368 +1,264 @@
 package com.android.tv.classics.utils
 
-import android.Manifest
 import android.app.DownloadManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.content.pm.PackageInfo
-import android.content.pm.PackageManager
-import android.database.Cursor
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
-import android.util.Log
-import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import com.android.tv.classics.BuildConfig
 import com.android.tv.classics.LiveTvApplication
-import org.json.JSONObject
-import java.io.File
-import java.net.URL
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
 import timber.log.Timber
-import java.io.BufferedReader
-import java.io.InputStreamReader
+import java.io.File
 import java.net.HttpURLConnection
+import java.net.URL
 
 /**
- * Manages app updates from a custom URL (not Google Play Store)
+ * Manages app updates by checking GitHub Releases on a private repository.
+ * Compares the latest release tag against the current versionName and downloads
+ * the matching APK asset via DownloadManager with Bearer auth headers.
  */
 class AppUpdateManager(private val context: Context) {
+
     companion object {
-        private const val TAG = "AppUpdateManager"
-        private const val UPDATE_INFO_URL = "https://drive.google.com/uc?export=download&id=1ZmNlDblW5z1fV18yW_FYlUX3P2hBCO2F"
+        private const val GITHUB_API_BASE = "https://api.github.com"
         private const val APK_MIME_TYPE = "application/vnd.android.package-archive"
-        
-        // File paths and names
         private const val DOWNLOAD_FOLDER = "JasmineTvUpdates"
         private const val APK_NAME = "JasmineTv-update.apk"
-        
-        // Used to store the download ID from DownloadManager
-        private var downloadId: Long = -1
+
+        private var downloadId: Long = -1L
     }
-    
-    // BroadcastReceiver to handle download completion
+
     private val downloadCompleteReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            val id = intent?.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1)
+            val id = intent?.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1) ?: return
             if (id == downloadId) {
-                Timber.d("Download complete, installing update")
+                Timber.d("Download complete, launching installer")
                 installDownloadedApk()
             }
         }
     }
-    
-    /**
-     * Initialize the update manager and register receivers
-     */
+
     fun initialize() {
-        // Register for download complete broadcasts
         context.registerReceiver(
             downloadCompleteReceiver,
             IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
         )
     }
-    
-    /**
-     * Clean up resources
-     */
+
     fun destroy() {
-        try {
-            context.unregisterReceiver(downloadCompleteReceiver)
-        } catch (e: Exception) {
-            Timber.e( "Error unregistering receiver", e)
-        }
+        try { context.unregisterReceiver(downloadCompleteReceiver) } catch (e: Exception) { /* already unregistered */ }
     }
-    
+
+    // ───────────────────────── Public API ─────────────────────────
+
     /**
-     * Check for app updates
-     * @return true if an update is available
+     * Fetches the latest GitHub Release and returns an [UpdateInfo].
+     * Runs on Dispatchers.IO — call from a coroutine.
      */
     suspend fun checkForUpdates(): UpdateInfo = withContext(Dispatchers.IO) {
         try {
-            // Get current app version
-            val currentVersion = getCurrentAppVersion()
-            
-            // Fetch update information from remote server
-            val updateJson = fetchUpdateInfo()
-            val updateInfo = parseUpdateInfo(updateJson)
-            
-            // Compare versions
-            val isUpdateAvailable = isUpdateAvailable(currentVersion, updateInfo.versionCode)
-            
-            return@withContext UpdateInfo(
-                isUpdateAvailable = isUpdateAvailable,
-                versionName = updateInfo.versionName,
-                versionCode = updateInfo.versionCode,
-                downloadUrl = updateInfo.downloadUrl,
-                releaseNotes = updateInfo.releaseNotes,
-                updateDate = updateInfo.updateDate,
-                forceUpdate = updateInfo.forceUpdate,
-                minSupportedVersion = updateInfo.minSupportedVersion
-            )
-        } catch (e: Exception) {
-            Timber.e( "Error checking for updates", e)
-            return@withContext UpdateInfo(isUpdateAvailable = false)
-        }
-    }
-    
-    /**
-     * Start downloading the update
-     * @param updateInfo Information about the update to download
-     * @return true if download started successfully
-     */
-    fun startUpdateDownload(updateInfo: UpdateInfo): Boolean {
-        try {
-            val downloadUrl = updateInfo.downloadUrl ?: return false
-            
-            // Check if we have permission to write to external storage
-            val hasStoragePermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                context.checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) == 
-                        PackageManager.PERMISSION_GRANTED
-            } else {
-                true // Permission is granted at install time on older Android versions
-            }
-            
-            // Create download request
-            val uri = Uri.parse(downloadUrl)
-            val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-            val request = DownloadManager.Request(uri).apply {
-                setTitle("Jasmine TV Update")
-                setDescription("Downloading version ${updateInfo.versionName}")
-                setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                
-                if (hasStoragePermission) {
-                    // Create download directory if it doesn't exist
-                    val downloadFolder = File(
-                        Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
-                        DOWNLOAD_FOLDER
-                    )
-                    if (!downloadFolder.exists()) {
-                        downloadFolder.mkdirs()
-                    }
-                    
-                    // Save to public external storage
-                    setDestinationInExternalPublicDir(
-                        Environment.DIRECTORY_DOWNLOADS,
-                        "$DOWNLOAD_FOLDER/$APK_NAME"
-                    )
-                } else {
-                    // No permission, use app's private directory
-                    // This will be cleaned up when the app is uninstalled
-                    val file = File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), APK_NAME)
-                    setDestinationUri(Uri.fromFile(file))
-                    Timber.d("Using app-specific storage for download: ${file.absolutePath}")
-                }
-                
-                setMimeType(APK_MIME_TYPE)
-            }
-            
-            // Start download
-            downloadId = downloadManager.enqueue(request)
-            return true
-        } catch (e: Exception) {
-            Timber.e( "Error starting download", e)
-            return false
-        }
-    }
-    
-    /**
-     * Get download progress
-     * @return progress percentage (0-100) or -1 if not found
-     */
-    fun getDownloadProgress(): Int {
-        if (downloadId == -1L) return -1
-        
-        val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-        val query = DownloadManager.Query().setFilterById(downloadId)
-        
-        downloadManager.query(query).use { cursor ->
-            if (cursor.moveToFirst()) {
-                val bytesDownloaded = cursor.getLong(
-                    cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR)
-                )
-                val bytesTotal = cursor.getLong(
-                    cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES)
-                )
-                
-                if (bytesTotal > 0) {
-                    return ((bytesDownloaded * 100) / bytesTotal).toInt()
-                }
-            }
-        }
-        
-        return -1
-    }
-    
-    /**
-     * Cancel ongoing download
-     */
-    fun cancelDownload() {
-        if (downloadId != -1L) {
-            val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-            downloadManager.remove(downloadId)
-            downloadId = -1L
-        }
-    }
-    
-    /**
-     * Install the downloaded APK
-     */
-    private fun installDownloadedApk() {
-        try {
-            val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-            val query = DownloadManager.Query().setFilterById(downloadId)
-            
-            downloadManager.query(query).use { cursor ->
-                if (cursor.moveToFirst()) {
-                    val columnIndex = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)
-                    if (columnIndex != -1 && 
-                        cursor.getInt(columnIndex) == DownloadManager.STATUS_SUCCESSFUL) {
-                        
-                        val uriIndex = cursor.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI)
-                        if (uriIndex != -1) {
-                            val uriString = cursor.getString(uriIndex)
-                            val uri = Uri.parse(uriString)
-                            val file = File(uri.path ?: "")
-                            
-                            installApk(file)
-                        }
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            Timber.e( "Error installing APK", e)
-            LiveTvApplication.showToast("Error installing update: ${e.message}")
-        }
-    }
-    
-    /**
-     * Install APK file
-     */
-    private fun installApk(apkFile: File) {
-        try {
-            val intent = Intent(Intent.ACTION_VIEW)
-            val uri: Uri
-            
-            // For Android N and above, we need to use FileProvider
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                uri = FileProvider.getUriForFile(
-                    context,
-                    "${context.packageName}.provider",
-                    apkFile
-                )
-                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            } else {
-                uri = Uri.fromFile(apkFile)
-            }
-            
-            intent.setDataAndType(uri, APK_MIME_TYPE)
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            context.startActivity(intent)
-        } catch (e: Exception) {
-            Timber.e( "Error launching install intent", e)
-            LiveTvApplication.showToast("Error installing update: ${e.message}")
-        }
-    }
-    
-    /**
-     * Get current app version code
-     */
-    private fun getCurrentAppVersion(): Int {
-        return try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                context.packageManager.getPackageInfo(context.packageName, 0).longVersionCode.toInt()
-            } else {
-                @Suppress("DEPRECATION")
-                context.packageManager.getPackageInfo(context.packageName, 0).versionCode
-            }
-        } catch (e: Exception) {
-            Timber.e( "Error getting current app version", e)
-            BuildConfig.VERSION_CODE
-        }
-    }
-    
-    /**
-     * Fetch update information from remote server
-     */
-    private suspend fun fetchUpdateInfo(): String = withContext(Dispatchers.IO) {
-        try {
-            val url = URL(UPDATE_INFO_URL)
-            val connection = url.openConnection() as HttpURLConnection
-            connection.requestMethod = "GET"
-            connection.connectTimeout = 15000
-            connection.readTimeout = 15000
-            connection.connect()
-            
-            if (connection.responseCode == HttpURLConnection.HTTP_OK) {
-                val reader = BufferedReader(InputStreamReader(connection.inputStream))
-                val response = StringBuilder()
-                var line: String?
-                
-                while (reader.readLine().also { line = it } != null) {
-                    response.append(line)
-                }
-                reader.close()
-                
-                return@withContext response.toString()
-            } else {
-                Timber.e( "Server returned error code: ${connection.responseCode}")
-                return@withContext ""
-            }
-        } catch (e: Exception) {
-            Timber.e( "Error fetching update info", e)
-            return@withContext ""
-        }
-    }
-    
-    /**
-     * Parse update information from JSON
-     */
-    private fun parseUpdateInfo(jsonString: String): UpdateInfo {
-        return try {
-            if (jsonString.isEmpty()) {
-                return UpdateInfo(isUpdateAvailable = false)
-            }
-            
-            val json = JSONObject(jsonString)
-            
+            val json = fetchLatestRelease()
+            if (json.isEmpty()) return@withContext UpdateInfo(isUpdateAvailable = false)
+
+            val release = JSONObject(json)
+            val tagName = release.optString("tag_name", "")          // e.g. "v1.2.0"
+            val releaseName = release.optString("name", tagName)
+            val releaseNotes = release.optString("body", "")
+            val publishedAt = release.optString("published_at", "")
+
+            // Strip leading "v" for version comparison
+            val remoteVersion = tagName.trimStart('v')
+
+            // Find the APK asset
+            val assets = release.optJSONArray("assets") ?: JSONArray()
+            val asset = findApkAsset(assets)
+
             UpdateInfo(
-                isUpdateAvailable = false, // Will be determined later by comparing versions
-                versionName = json.optString("versionName", ""),
-                versionCode = json.optInt("versionCode", 0),
-                downloadUrl = json.optString("downloadUrl", ""),
-                releaseNotes = json.optString("releaseNotes", ""),
-                updateDate = json.optString("updateDate", ""),
-                forceUpdate = json.optBoolean("forceUpdate", false),
-                minSupportedVersion = json.optInt("minSupportedVersion", 0)
+                isUpdateAvailable = isNewer(remoteVersion, BuildConfig.VERSION_NAME),
+                tagName = tagName,
+                versionName = remoteVersion,
+                releaseName = releaseName,
+                downloadApiUrl = asset?.optString("url"),       // API URL (needs auth)
+                assetId = asset?.optLong("id") ?: -1L,
+                releaseNotes = releaseNotes,
+                publishedAt = publishedAt
             )
         } catch (e: Exception) {
-            Timber.e( "Error parsing update info", e)
+            Timber.e(e, "Error checking for updates")
             UpdateInfo(isUpdateAvailable = false)
         }
     }
-    
+
     /**
-     * Check if an update is available by comparing version codes
+     * Enqueues an authenticated download via [DownloadManager].
+     * Returns true if the download was successfully enqueued.
      */
-    private fun isUpdateAvailable(currentVersion: Int, newVersion: Int): Boolean {
-        return newVersion > currentVersion
+    fun startUpdateDownload(updateInfo: UpdateInfo): Boolean {
+        val apiUrl = updateInfo.downloadApiUrl ?: return false
+        return try {
+            val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+
+            // For private GitHub repos the asset must be fetched via the API URL
+            // with Accept: application/octet-stream + Authorization header.
+            val request = DownloadManager.Request(Uri.parse(apiUrl)).apply {
+                setTitle("Jasmine TV Update")
+                setDescription("Downloading ${updateInfo.releaseName}")
+                setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                addRequestHeader("Authorization", "Bearer ${BuildConfig.GITHUB_TOKEN}")
+                addRequestHeader("Accept", "application/octet-stream")
+                addRequestHeader("X-GitHub-Api-Version", "2022-11-28")
+
+                val destFile = File(
+                    context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS),
+                    APK_NAME
+                )
+                setDestinationUri(Uri.fromFile(destFile))
+                setMimeType(APK_MIME_TYPE)
+            }
+
+            downloadId = dm.enqueue(request)
+            Timber.d("Download enqueued id=$downloadId  url=$apiUrl")
+            true
+        } catch (e: Exception) {
+            Timber.e(e, "Error starting download")
+            false
+        }
     }
-    
+
+    fun getDownloadProgress(): Int {
+        if (downloadId == -1L) return -1
+        val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+        dm.query(DownloadManager.Query().setFilterById(downloadId)).use { cursor ->
+            if (cursor.moveToFirst()) {
+                val downloaded = cursor.getLong(
+                    cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR))
+                val total = cursor.getLong(
+                    cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES))
+                if (total > 0) return ((downloaded * 100) / total).toInt()
+            }
+        }
+        return -1
+    }
+
+    fun cancelDownload() {
+        if (downloadId != -1L) {
+            (context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager).remove(downloadId)
+            downloadId = -1L
+        }
+    }
+
+    // ───────────────────────── Private helpers ─────────────────────────
+
+    private suspend fun fetchLatestRelease(): String = withContext(Dispatchers.IO) {
+        val url = URL("$GITHUB_API_BASE/repos/${BuildConfig.GITHUB_REPO}/releases/latest")
+        val conn = url.openConnection() as HttpURLConnection
+        try {
+            conn.requestMethod = "GET"
+            conn.setRequestProperty("Authorization", "Bearer ${BuildConfig.GITHUB_TOKEN}")
+            conn.setRequestProperty("Accept", "application/vnd.github+json")
+            conn.setRequestProperty("X-GitHub-Api-Version", "2022-11-28")
+            conn.connectTimeout = 15_000
+            conn.readTimeout = 15_000
+            conn.connect()
+
+            if (conn.responseCode == HttpURLConnection.HTTP_OK) {
+                conn.inputStream.bufferedReader().use { it.readText() }
+            } else {
+                Timber.e("GitHub API returned ${conn.responseCode}")
+                ""
+            }
+        } finally {
+            conn.disconnect()
+        }
+    }
+
+    /** Finds the APK asset matching [BuildConfig.GITHUB_APK_ASSET_NAME]. */
+    private fun findApkAsset(assets: JSONArray): JSONObject? {
+        val targetName = BuildConfig.GITHUB_APK_ASSET_NAME
+        for (i in 0 until assets.length()) {
+            val asset = assets.getJSONObject(i)
+            if (asset.optString("name") == targetName ||
+                asset.optString("content_type") == APK_MIME_TYPE) {
+                return asset
+            }
+        }
+        // Fallback: any .apk file
+        for (i in 0 until assets.length()) {
+            val asset = assets.getJSONObject(i)
+            if (asset.optString("name").endsWith(".apk")) return asset
+        }
+        return null
+    }
+
     /**
-     * Data class representing update information
+     * Compare version strings like "1.2.3". Returns true if [remote] > [current].
+     * Falls back to string comparison if parsing fails.
      */
+    private fun isNewer(remote: String, current: String): Boolean {
+        return try {
+            val r = remote.split(".").map { it.toInt() }
+            val c = current.split(".").map { it.toInt() }
+            val len = maxOf(r.size, c.size)
+            for (i in 0 until len) {
+                val rv = r.getOrElse(i) { 0 }
+                val cv = c.getOrElse(i) { 0 }
+                if (rv != cv) return rv > cv
+            }
+            false
+        } catch (e: Exception) {
+            remote != current
+        }
+    }
+
+    private fun installDownloadedApk() {
+        try {
+            val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+            dm.query(DownloadManager.Query().setFilterById(downloadId)).use { cursor ->
+                if (!cursor.moveToFirst()) return
+                val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
+                if (status != DownloadManager.STATUS_SUCCESSFUL) return
+                val localUri = cursor.getString(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_LOCAL_URI))
+                val file = File(Uri.parse(localUri).path ?: return)
+                installApk(file)
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Error triggering install")
+            LiveTvApplication.showToast("Error installing update")
+        }
+    }
+
+    private fun installApk(apkFile: File) {
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", apkFile)
+                setDataAndType(uri, APK_MIME_TYPE)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            } else {
+                setDataAndType(Uri.fromFile(apkFile), APK_MIME_TYPE)
+            }
+        }
+        context.startActivity(intent)
+    }
+
+    // ───────────────────────── Data ─────────────────────────
+
     data class UpdateInfo(
         val isUpdateAvailable: Boolean,
+        val tagName: String = "",
         val versionName: String = "",
-        val versionCode: Int = 0,
-        val downloadUrl: String? = null,
+        val releaseName: String = "",
+        val downloadApiUrl: String? = null,
+        val assetId: Long = -1L,
         val releaseNotes: String = "",
-        val updateDate: String = "",
-        val forceUpdate: Boolean = false,
-        val minSupportedVersion: Int = 0
+        val publishedAt: String = ""
     ) : java.io.Serializable
 }

@@ -164,10 +164,10 @@ class UpdateDialogFragment : DialogFragment() {
         }
         
         // Make the dialog uncancelable if it's a force update
-        isCancelable = !updateInfo.forceUpdate
+        isCancelable = !false
         
         // Hide the cancel button if it's a force update
-        if (updateInfo.forceUpdate) {
+        if (false) {
             cancelButton.visibility = View.GONE
         }
         
@@ -211,13 +211,13 @@ class UpdateDialogFragment : DialogFragment() {
                         }
                     }
                     KeyEvent.KEYCODE_BACK -> {
-                        if (!updateInfo.forceUpdate) {
+                        if (!false) {
                             dismiss()
                             return@setOnKeyListener true
                         }
                     }
                     KeyEvent.KEYCODE_ESCAPE -> {
-                        if (!updateInfo.forceUpdate) {
+                        if (!false) {
                             dismiss()
                             return@setOnKeyListener true
                         }

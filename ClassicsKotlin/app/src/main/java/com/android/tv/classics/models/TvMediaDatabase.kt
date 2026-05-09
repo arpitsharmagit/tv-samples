@@ -23,6 +23,8 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverter
 import androidx.room.TypeConverters
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 
@@ -46,7 +48,7 @@ class TvMediaConverters {
 
 /** Room database implementation */
 @TypeConverters(TvMediaConverters::class)
-@Database(version = 1, exportSchema = false, entities = [
+@Database(version = 2, exportSchema = false, entities = [
     TvMediaMetadata::class, TvMediaCollection::class, TvMediaBackground::class])
 abstract class TvMediaDatabase : RoomDatabase() {
     abstract fun metadata(): TvMediaMetadataDAO
@@ -57,16 +59,21 @@ abstract class TvMediaDatabase : RoomDatabase() {
 
         private val DATABASE_NAME = TvMediaDatabase::class.java.simpleName
 
+        private val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "ALTER TABLE TvMediaMetadata ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0"
+                )
+            }
+        }
+
         /** Singleton property */
         @Volatile private var INSTANCE: TvMediaDatabase? = null
 
-        /**
-         * Convenience method used to get an instance of our database, taken from official codelab:
-         * https://codelabs.developers.google.com/codelabs/android-room-with-a-view-kotlin/#6
-         */
         fun getInstance(context: Context): TvMediaDatabase = INSTANCE ?: synchronized(this) {
             Room.databaseBuilder(
                     context.applicationContext, TvMediaDatabase::class.java, DATABASE_NAME)
+                    .addMigrations(MIGRATION_1_2)
                     .build().also { INSTANCE = it }
         }
      }

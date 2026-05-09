@@ -16,16 +16,27 @@
 
 package com.android.tv.classics.fragments
 
+import android.animation.ObjectAnimator
+import android.content.res.ColorStateList
 import android.content.Context
 import android.graphics.Color
+import android.graphics.Typeface
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.support.v4.media.session.MediaSessionCompat
 import android.util.Log
+import android.util.TypedValue
+import android.view.Gravity
 import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.FrameLayout
+import android.widget.ProgressBar
+import android.widget.TextView
+import androidx.leanback.app.GuidedStepSupportFragment
 import androidx.leanback.app.PlaybackSupportFragment
 import androidx.leanback.app.VideoSupportFragment
 import androidx.leanback.app.VideoSupportFragmentGlueHost
@@ -73,7 +84,6 @@ import java.util.Calendar
 import java.util.Locale
 import java.util.TimeZone
 import java.util.concurrent.TimeUnit
-import kotlin.collections.set
 import kotlin.math.max
 import kotlin.math.min
 
@@ -83,8 +93,24 @@ class NowPlayingFragment : VideoSupportFragment() {
 
     private lateinit var metadata:TvMediaMetadata
     private lateinit var shows: List<TvMediaEPG>
-    private var currentPlayIndex = -1
-    private lateinit var channelsMetadataList: HashMap<String,TvMediaMetadata>
+    private var channelsMetadataList: List<TvMediaMetadata> = emptyList()
+
+    /** Tracks whether the Leanback controls overlay (channel row) is currently visible */
+    private var overlayVisible = false
+
+    /** Current stream protocol — set when playback starts, used in quality action label */
+    private var currentStreamType = "—"
+
+    override fun showControlsOverlay(runAnimation: Boolean) {
+        super.showControlsOverlay(runAnimation)
+        overlayVisible = true
+    }
+
+    override fun hideControlsOverlay(runAnimation: Boolean) {
+        super.hideControlsOverlay(runAnimation)
+        overlayVisible = false
+    }
+
 
     /** AndroidX navigation arguments */
     private val args: NowPlayingFragmentArgs by navArgs()
@@ -103,18 +129,19 @@ class NowPlayingFragment : VideoSupportFragment() {
      */
     private lateinit var mediaSessionConnector: MediaSessionConnector
 
-    override fun onVideoSizeChanged(width: Int, height: Int) { }
+    override fun onVideoSizeChanged(width: Int, height: Int) {
+        // Refresh quality label when adaptive stream settles on a new resolution
+        view?.post { if (::playerGlue.isInitialized) playerGlue.refreshTrackInfo() }
+    }
 
     /** Custom implementation of [PlaybackTransportControlGlue] */
     private inner class MediaPlayerGlue(context: Context, adapter: LeanbackPlayerAdapter) :
             PlaybackTransportControlGlue<LeanbackPlayerAdapter>(context, adapter) {
 
-        private val actionRewind = PlaybackControlsRow.RewindAction(context)
-        private val actionFastForward = PlaybackControlsRow.FastForwardAction(context)
-        private val actionClosedCaptions = PlaybackControlsRow.ClosedCaptioningAction(context)
+        private val actionAudioTrack = Action(ACTION_AUDIO_ID, "Audio", "Loading…")
+        private val actionQuality    = Action(ACTION_QUALITY_ID, "Quality", "Loading…")
 
         fun skipForward(millis: Long = SKIP_PLAYBACK_MILLIS) =
-                // Ensures we don't advance past the content duration (if set)
                 player.seekTo(if (player.contentDuration > 0) {
                     min(player.contentDuration, player.currentPosition + millis)
                 } else {
@@ -122,53 +149,88 @@ class NowPlayingFragment : VideoSupportFragment() {
                 })
 
         fun skipBackward(millis: Long = SKIP_PLAYBACK_MILLIS) =
-                // Ensures we don't go below zero position
                 player.seekTo(max(0, player.currentPosition - millis))
 
         fun nextChannel() {
-            val index: String = (++currentPlayIndex).toString()
-            val nextChannelMetadata = channelsMetadataList[index]
-            if(nextChannelMetadata != null){
-                setMetadata(nextChannelMetadata)
-            }
+            val idx = channelsMetadataList.indexOfFirst { it.id == metadata.id }
+            val next = channelsMetadataList.getOrNull(idx + 1) ?: return
+            showChannelToast("▶ ${next.title}")
+            setMetadata(next)
         }
+
         fun previousChannel() {
-            val index: String = (--currentPlayIndex).toString()
-            val prevChannelMetadata = channelsMetadataList[index]
-            if (prevChannelMetadata != null) {
-                setMetadata(prevChannelMetadata)
-            }
+            val idx = channelsMetadataList.indexOfFirst { it.id == metadata.id }
+            if (idx <= 0) return
+            val prev = channelsMetadataList[idx - 1]
+            showChannelToast("◀ ${prev.title}")
+            setMetadata(prev)
         }
-
-//        override fun onUpdateProgress() {}
-
-//        override fun onCreateRowPresenter(): PlaybackRowPresenter {
-//            return super.onCreateRowPresenter().apply {
-//                val rp = (this as? PlaybackTransportRowPresenter)
-//                rp?.progressColor = Color.TRANSPARENT
-//                rp?.secondaryProgressColor = Color.TRANSPARENT
-//            }
-//        }
 
         override fun onCreatePrimaryActions(adapter: ArrayObjectAdapter) {
-            super.onCreatePrimaryActions(adapter)
-            // Append rewind and fast forward actions to our player, keeping the play/pause actions
-            // created by default by the glue
-//            adapter.add(actionRewind)
-//            adapter.add(actionFastForward)
-//            adapter.add(actionClosedCaptions)
+            // No actions — live TV: no play/pause, no skip buttons
         }
 
-        override fun onActionClicked(action: Action) = when (action) {
-//            actionRewind -> skipBackward()
-//            actionFastForward -> skipForward()
+        override fun onCreateSecondaryActions(adapter: ArrayObjectAdapter) {
+            adapter.add(actionAudioTrack)
+            adapter.add(actionQuality)
+        }
+
+        override fun onUpdateProgress() {
+            // Let Leanback update the seek bar — for live streams ExoPlayer provides
+            // a valid currentPosition within the live window, so the bar moves naturally.
+            super.onUpdateProgress()
+        }
+
+        override fun onActionClicked(action: Action) = when (action.id) {
+            ACTION_AUDIO_ID   -> showAudioTrackSelector()
+            ACTION_QUALITY_ID -> showQualitySelector()
             else -> super.onActionClicked(action)
+        }
+
+        /** Reads current track info from ExoPlayer and updates the secondary action labels */
+        fun refreshTrackInfo() {
+            val selector = player.trackSelector as? com.google.android.exoplayer2.trackselection.DefaultTrackSelector ?: return
+            val info = selector.currentMappedTrackInfo ?: return
+
+            // -- Audio tracks --
+            var audioCount = 0
+            var firstLang: String? = null
+            for (i in 0 until info.rendererCount) {
+                if (info.getRendererType(i) != C.TRACK_TYPE_AUDIO) continue
+                val groups = info.getTrackGroups(i)
+                for (j in 0 until groups.length) {
+                    val group = groups.get(j)
+                    for (k in 0 until group.length) {
+                        audioCount++
+                        if (firstLang == null) {
+                            firstLang = group.getFormat(k).language?.uppercase()
+                        }
+                    }
+                }
+            }
+            val audioLabel = when {
+                audioCount > 1 -> "Audio ($audioCount)"
+                audioCount == 1 -> "Audio (${firstLang ?: "1"})"
+                else -> "Audio"
+            }
+            // label1 = action title (always visible), label2 = subtitle (may or may not render)
+            actionAudioTrack.setLabel1(audioLabel)
+            actionAudioTrack.setLabel2(if (audioCount > 1) "Tap to switch" else "")
+
+            // -- Video quality (current playing format) --
+            val vFmt = player.videoFormat
+            val qualLabel = if (vFmt != null && vFmt.height > 0) "${vFmt.height}p" else "Auto"
+            actionQuality.setLabel1("$currentStreamType $qualLabel")
+            actionQuality.setLabel2("Tap to switch")
+
+            // Force a full row rebuild — most reliable way to get Leanback to re-render actions
+            host?.notifyPlaybackRowChanged()
         }
 
         /** Custom function used to update the metadata displayed for currently playing media */
         fun setMetadata(newmetadata: TvMediaMetadata) {
             metadata = newmetadata
-            // Displays basic metadata in the player
+            showLoading()
             lifecycleScope.launch(Dispatchers.IO) {
                 // set playback row art
 //                metadata.artUri?.let { art = Coil.get(it) }
@@ -228,15 +290,15 @@ class NowPlayingFragment : VideoSupportFragment() {
                         startPlayingCurrentShow(currentShow)
                     } else {
                         Timber.e( "No EPG data available for channel ${metadata.id}")
-                        // Show a message to the user
                         withContext(Dispatchers.Main) {
+                            hideLoading()
                             LiveTvApplication.showToast("No program information available")
                         }
                     }
                 } catch (e: Exception) {
                     Timber.e( "Error processing EPG data", e)
-                    // Show error message to user
                     withContext(Dispatchers.Main) {
+                        hideLoading()
                         LiveTvApplication.showToast("Error loading program information")
                     }
                 }
@@ -352,6 +414,9 @@ class NowPlayingFragment : VideoSupportFragment() {
 
             withContext(Dispatchers.Main) {
                 increasePlayCount()
+                hidePlaybackError()
+                hideLoading()
+                currentStreamType = if (isDash) "DASH" else "HLS"
                 // Prepares metadata playback — DASH or HLS depending on chosen URL
                 val mediaSource = prepareMediaSource(
                     metadata.contentUri, hashMap, isDash, dashKeyUrl, drmLicenseHeaders
@@ -367,7 +432,8 @@ class NowPlayingFragment : VideoSupportFragment() {
             }
         }
         catch(e: Exception){
-            Timber.e("error occurred while playing",e);
+            Timber.e("error occurred while playing", e)
+            withContext(Dispatchers.Main) { hideLoading() }
         }
     }
 
@@ -504,7 +570,6 @@ class NowPlayingFragment : VideoSupportFragment() {
         super.onCreate(savedInstanceState)
 
         backgroundType = PlaybackSupportFragment.BG_NONE
-        channelsMetadataList = hashMapOf()
         database = TvMediaDatabase.getInstance(requireContext())
         metadata = args.metadata
 
@@ -608,6 +673,7 @@ class NowPlayingFragment : VideoSupportFragment() {
             setOnItemViewClickedListener { _, item, _, row ->
                 if (item is TvMediaMetadata) {
                     playerGlue.setMetadata(item)
+                    hideControlsOverlay(true)
                 }
             }
             // Add a list row for the <header, row adapter> pair
@@ -621,50 +687,43 @@ class NowPlayingFragment : VideoSupportFragment() {
         // Adds key listeners
         playerGlue.host.setOnKeyInterceptListener { view, keyCode, event ->
 
-            // Early exit: if the controls overlay is visible, don't intercept any keys
-            if (playerGlue.host.isControlsOverlayVisible) return@setOnKeyInterceptListener false
+            if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyInterceptListener false
 
-            // TODO(owahltinez): This workaround is necessary for navigation library to work with
-            //  Leanback's [PlaybackSupportFragment]
-            if (!playerGlue.host.isControlsOverlayVisible &&
-                    keyCode == KeyEvent.KEYCODE_BACK && event.action == KeyEvent.ACTION_DOWN) {
+            // If overlay is visible, BACK should dismiss it rather than leave the screen
+            if (keyCode == KeyEvent.KEYCODE_BACK) {
+                // If a track selector dialog (audio/quality) is open, close it first
+                if (requireActivity().supportFragmentManager.backStackEntryCount > 0) {
+                    requireActivity().supportFragmentManager.popBackStack()
+                    return@setOnKeyInterceptListener true
+                }
+                if (overlayVisible) {
+                    hideControlsOverlay(true)
+                    return@setOnKeyInterceptListener true
+                }
                 Timber.d("Intercepting BACK key for fragment navigation")
                 try {
-                    // Stop and release the player
                     player.stop()
                     player.release()
-                    
-                    // Release media session
                     mediaSession.isActive = false
                     mediaSessionConnector.setPlayer(null)
-                    
-                    // Cancel any pending callbacks
                     view?.removeCallbacks(updateMetadataTask)
-                    
                     val navController = Navigation.findNavController(
                             requireActivity(), R.id.fragment_container)
                     navController.currentDestination?.id?.let { navController.popBackStack(it, true) }
                 } catch (e: Exception) {
-                    Timber.e( "Error during back navigation", e)
+                    Timber.e("Error during back navigation", e)
                 }
                 return@setOnKeyInterceptListener true
             }
 
-            // Skips ahead when user presses DPAD_RIGHT
-            if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && event.action == KeyEvent.ACTION_DOWN) {
-                // playerGlue.skipForward()
-                preventControlsOverlay(playerGlue)
-                return@setOnKeyInterceptListener true
+            when (keyCode) {
+                // Only switch channels / open audio selector when overlay is NOT visible.
+                // When overlay is visible, pass all keys through to Leanback for normal row navigation.
+                KeyEvent.KEYCODE_DPAD_RIGHT -> if (!overlayVisible) { playerGlue.nextChannel(); hideControlsOverlay(false); true } else false
+                KeyEvent.KEYCODE_DPAD_LEFT  -> if (!overlayVisible) { playerGlue.previousChannel(); hideControlsOverlay(false); true } else false
+                KeyEvent.KEYCODE_DPAD_UP    -> if (!overlayVisible) { showAudioTrackSelector(); true } else false
+                else -> false
             }
-
-            // Rewinds when user presses DPAD_LEFT
-            if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT && event.action == KeyEvent.ACTION_DOWN) {
-                // playerGlue.skipBackward()
-                preventControlsOverlay(playerGlue)
-                return@setOnKeyInterceptListener true
-            }
-
-            false
         }
     }
 
@@ -676,26 +735,271 @@ class NowPlayingFragment : VideoSupportFragment() {
         return super.onCreateView(inflater, container, savedInstanceState)
     }
 
-    /** Workaround used to prevent controls overlay from showing and taking focus */
-    private fun preventControlsOverlay(playerGlue: MediaPlayerGlue) = view?.postDelayed({
-        playerGlue.host.showControlsOverlay(false)
-        playerGlue.host.hideControlsOverlay(false)
-    }, 10)
+    // Overlay TextView for channel switch feedback — persists for 3 seconds
+    private var channelInfoView: TextView? = null
+    private val channelInfoHandler = Handler(Looper.getMainLooper())
+    private val hideChannelInfoRunnable = Runnable {
+        channelInfoView?.let { tv ->
+            ObjectAnimator.ofFloat(tv, "alpha", 1f, 0f).apply {
+                duration = 400
+                start()
+            }
+        }
+    }
 
-    private fun populateChannelList(collectionId: String){
+    // Persistent error overlay shown when playback fails
+    private var errorOverlayView: TextView? = null
+
+    /** Shows a full-screen error banner that stays until next successful playback */
+    private fun showPlaybackError(message: String) {
+        val rootView = view as? ViewGroup ?: return
+        if (errorOverlayView == null) {
+            errorOverlayView = TextView(requireContext()).apply {
+                setTextColor(Color.WHITE)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
+                setShadowLayer(4f, 0f, 2f, Color.BLACK)
+                setPadding(60, 40, 60, 40)
+                setBackgroundColor(Color.parseColor("#CC880000"))
+                gravity = Gravity.CENTER
+                layoutParams = FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.WRAP_CONTENT
+                ).apply { gravity = Gravity.CENTER }
+            }
+            rootView.addView(errorOverlayView)
+        }
+        errorOverlayView!!.text = message
+        errorOverlayView!!.visibility = View.VISIBLE
+    }
+
+    private fun hidePlaybackError() {
+        errorOverlayView?.visibility = View.GONE
+    }
+
+    // Indeterminate loading spinner shown while stream URL is being fetched
+    private var loadingOverlay: FrameLayout? = null
+
+    private fun showLoading() {
+        activity?.runOnUiThread {
+            if (!isAdded) return@runOnUiThread
+            val rootView = view as? ViewGroup ?: return@runOnUiThread
+            if (loadingOverlay == null) {
+                val spinner = ProgressBar(requireContext()).apply {
+                    isIndeterminate = true
+                    indeterminateTintList = ColorStateList.valueOf(Color.WHITE)
+                    layoutParams = FrameLayout.LayoutParams(120, 120).apply {
+                        gravity = Gravity.CENTER
+                    }
+                }
+                loadingOverlay = FrameLayout(requireContext()).apply {
+                    setBackgroundColor(Color.parseColor("#99000000"))
+                    layoutParams = FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.MATCH_PARENT,
+                        FrameLayout.LayoutParams.MATCH_PARENT
+                    )
+                    addView(spinner)
+                }
+                rootView.addView(loadingOverlay)
+            }
+            // Ensure error overlay is behind loading overlay
+            errorOverlayView?.let { rootView.bringChildToFront(it) }
+            loadingOverlay!!.bringToFront()
+            loadingOverlay!!.visibility = View.VISIBLE
+        }
+    }
+
+    private fun hideLoading() {
+        activity?.runOnUiThread {
+            loadingOverlay?.visibility = View.GONE
+        }
+    }
+
+    /** Shows a persistent on-screen banner with the channel name for 3 seconds */
+    private fun showChannelToast(message: String) {
+        val rootView = view as? ViewGroup ?: return
+
+        // Create overlay on first use
+        if (channelInfoView == null) {
+            channelInfoView = TextView(requireContext()).apply {
+                setTextColor(Color.WHITE)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 24f)
+                setTypeface(null, Typeface.BOLD)
+                setShadowLayer(4f, 0f, 2f, Color.BLACK)
+                setPadding(40, 20, 40, 20)
+                setBackgroundColor(Color.parseColor("#AA000000"))
+                gravity = Gravity.CENTER
+                alpha = 0f
+
+                val lp = FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.WRAP_CONTENT,
+                    FrameLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+                    bottomMargin = 80
+                }
+                layoutParams = lp
+            }
+            rootView.addView(channelInfoView)
+        }
+
+        channelInfoView!!.text = message
+        channelInfoHandler.removeCallbacks(hideChannelInfoRunnable)
+
+        // Fade in
+        channelInfoView!!.alpha = 0f
+        ObjectAnimator.ofFloat(channelInfoView!!, "alpha", 0f, 1f).apply {
+            duration = 200
+            start()
+        }
+
+        // Auto-hide after 3 seconds
+        channelInfoHandler.postDelayed(hideChannelInfoRunnable, 3000)
+    }
+
+    /**
+     * Shows an audio track selection dialog.
+     * Lists all audio tracks in the current stream; user picks one via D-pad.
+     * Triggered by DPAD_UP.
+     */
+    private fun showAudioTrackSelector() {
+        val trackSelector = player.trackSelector as? com.google.android.exoplayer2.trackselection.DefaultTrackSelector ?: run {
+            LiveTvApplication.showToast("Audio selection not available")
+            return
+        }
+        val mappedTrackInfo = trackSelector.currentMappedTrackInfo ?: run {
+            LiveTvApplication.showToast("Stream not ready yet")
+            return
+        }
+
+        // Collect all audio tracks across all renderers
+        data class AudioTrack(val rendererIndex: Int, val groupIndex: Int, val trackIndex: Int, val label: String)
+        val audioTracks = mutableListOf<AudioTrack>()
+
+        for (rendererIdx in 0 until mappedTrackInfo.rendererCount) {
+            if (player.getRendererType(rendererIdx) != com.google.android.exoplayer2.C.TRACK_TYPE_AUDIO) continue
+            val groups = mappedTrackInfo.getTrackGroups(rendererIdx)
+            for (groupIdx in 0 until groups.length) {
+                val group = groups.get(groupIdx)
+                for (trackIdx in 0 until group.length) {
+                    val format = group.getFormat(trackIdx)
+                    val lang = format.language ?: "und"
+                    val label = buildString {
+                        append(java.util.Locale(lang).displayLanguage.ifEmpty { lang.uppercase() })
+                        if (!format.label.isNullOrEmpty()) append(" — ${format.label}")
+                        format.channelCount.takeIf { it > 0 }?.let { append(" (${it}ch)") }
+                        format.bitrate.takeIf { it > 0 }?.let { append(" ${it / 1000}kbps") }
+                    }
+                    audioTracks.add(AudioTrack(rendererIdx, groupIdx, trackIdx, label))
+                }
+            }
+        }
+
+        if (audioTracks.isEmpty()) {
+            LiveTvApplication.showToast("No alternate audio tracks")
+            return
+        }
+        if (audioTracks.size == 1) {
+            LiveTvApplication.showToast("Only one audio track: ${audioTracks[0].label}")
+            return
+        }
+
+        // Show Leanback-friendly GuidedStep dialog with audio options
+        val fragment = AudioTrackSelectorFragment.newInstance(
+            audioTracks.map { it.label },
+            onSelected = { selectedIndex ->
+                val chosen = audioTracks[selectedIndex]
+                val groups = mappedTrackInfo.getTrackGroups(chosen.rendererIndex)
+                val override = com.google.android.exoplayer2.trackselection.DefaultTrackSelector.SelectionOverride(
+                    chosen.groupIndex, chosen.trackIndex)
+                trackSelector.setParameters(
+                    trackSelector.buildUponParameters()
+                        .setRendererDisabled(chosen.rendererIndex, false)
+                        .setSelectionOverride(chosen.rendererIndex, groups, override)
+                )
+                LiveTvApplication.showToast("Audio: ${chosen.label}")
+            }
+        )
+        GuidedStepSupportFragment.add(requireActivity().supportFragmentManager, fragment)
+    }
+
+    private fun showQualitySelector() {
+        val trackSelector = player.trackSelector as? com.google.android.exoplayer2.trackselection.DefaultTrackSelector ?: run {
+            LiveTvApplication.showToast("Quality selection not available")
+            return
+        }
+        val mappedInfo = trackSelector.currentMappedTrackInfo ?: run {
+            LiveTvApplication.showToast("Stream not ready yet")
+            return
+        }
+
+        data class VideoTrack(val rendererIdx: Int, val groupIdx: Int, val trackIdx: Int, val label: String)
+        val tracks = mutableListOf<VideoTrack>()
+        tracks.add(VideoTrack(-1, -1, -1, "Auto (Recommended)"))
+
+        for (i in 0 until mappedInfo.rendererCount) {
+            if (player.getRendererType(i) != C.TRACK_TYPE_VIDEO) continue
+            val groups = mappedInfo.getTrackGroups(i)
+            for (j in 0 until groups.length) {
+                val group = groups.get(j)
+                for (k in 0 until group.length) {
+                    val fmt = group.getFormat(k)
+                    val label = buildString {
+                        if (fmt.height > 0) append("${fmt.height}p")
+                        else append("Track ${tracks.size}")
+                        if (fmt.bitrate > 0) append("  ${fmt.bitrate / 1000} kbps")
+                        if (!fmt.codecs.isNullOrEmpty()) append("  (${fmt.codecs!!.substringBefore(".")})")
+                    }
+                    tracks.add(VideoTrack(i, j, k, label))
+                }
+            }
+            break // only first video renderer
+        }
+
+        if (tracks.size <= 1) {
+            LiveTvApplication.showToast("No alternate quality tracks available")
+            return
+        }
+
+        // Mark currently selected quality
+        val currentHeight = player.videoFormat?.height ?: -1
+        val labels = tracks.map { t ->
+            if (t.rendererIdx < 0 && currentHeight <= 0) "✓ ${t.label}"
+            else if (t.rendererIdx >= 0) {
+                val fmt = mappedInfo.getTrackGroups(t.rendererIdx).get(t.groupIdx).getFormat(t.trackIdx)
+                if (fmt.height == currentHeight) "✓ ${t.label}" else t.label
+            } else t.label
+        }
+
+        val fragment = AudioTrackSelectorFragment.newInstance(labels) { selectedIdx ->
+            val sel = tracks[selectedIdx]
+            if (sel.rendererIdx < 0) {
+                // Auto — clear all video overrides
+                trackSelector.setParameters(trackSelector.buildUponParameters().clearSelectionOverrides())
+            } else {
+                val groups = mappedInfo.getTrackGroups(sel.rendererIdx)
+                trackSelector.setParameters(
+                    trackSelector.buildUponParameters()
+                        .setSelectionOverride(sel.rendererIdx, groups,
+                            com.google.android.exoplayer2.trackselection.DefaultTrackSelector.SelectionOverride(sel.groupIdx, sel.trackIdx))
+                )
+            }
+            view?.postDelayed({ playerGlue.refreshTrackInfo() }, 800)
+        }
+        GuidedStepSupportFragment.add(requireActivity().supportFragmentManager, fragment)
+    }
+
+    private fun populateChannelList(collectionId: String) {
         val collection = database.collections().findById(collectionId)
         if (collection != null) {
-            database.metadata().findByCollection(collection.id).forEach {
-                    tvMediaMetadata -> channelsMetadataList[tvMediaMetadata.id] =
-                tvMediaMetadata
-            }
+            channelsMetadataList = database.metadata().findByCollection(collection.id)
         }
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         view.setBackgroundColor(Color.BLACK)
-//        view.findViewById<View>(R.id.playback_controls_dock)?.visibility = View.GONE
+        // Hide controls overlay on start; D-pad DOWN will reveal it naturally via Leanback
+        hideControlsOverlay(false)
 
         // Restore focus state if available
         try {
@@ -719,6 +1023,7 @@ class NowPlayingFragment : VideoSupportFragment() {
 
         // Live stream URLs carry short-lived tokens (~2 min); re-fetch stream on every resume
         if (::shows.isInitialized && shows.isNotEmpty()) {
+            showLoading()
             lifecycleScope.launch(Dispatchers.IO) {
                 startPlayingCurrentShow(findCurrentShow())
             }
@@ -813,19 +1118,33 @@ class NowPlayingFragment : VideoSupportFragment() {
     }
 
     private inner class PlayerEventListener : Player.EventListener {
-//        override fun onPlayerStateChanged(playWhenReady: Boolean, playbackState: Int) {
-//            if (playWhenReady && playbackState == Player.STATE_READY) {
-//                // media actually playing
-//                Timber.i("started Playing");
-//                Timber.i(player.contentDuration.toString())
-////                player.seekTo(C.TIME_UNSET);
-//            }
-//        }
-        override fun onPlayerError(error: ExoPlaybackException) {
+        override fun onPlayerStateChanged(playWhenReady: Boolean, playbackState: Int) {
+            // Refresh audio/quality action labels once the stream is fully ready
+            if (playbackState == Player.STATE_READY) {
+                activity?.runOnUiThread {
+                    if (::playerGlue.isInitialized) playerGlue.refreshTrackInfo()
+                }
+            }
+        }
 
-            Timber.e("PlayError: ChannelNo: ${metadata.id} Url: ${metadata.contentUri}",error);
-//            removeWatchNext()
+        override fun onPlayerError(error: ExoPlaybackException) {
+            Timber.e("PlayError: ChannelNo: ${metadata.id} Url: ${metadata.contentUri}", error)
             decreasePlayCount()
+
+            val reason = when (error.type) {
+                ExoPlaybackException.TYPE_SOURCE ->
+                    "Stream unavailable — source error\n${error.sourceException?.message?.take(80) ?: ""}"
+                ExoPlaybackException.TYPE_RENDERER ->
+                    "Playback error — renderer failure\n${error.rendererException?.message?.take(80) ?: ""}"
+                ExoPlaybackException.TYPE_UNEXPECTED ->
+                    "Unexpected error\n${error.unexpectedException?.message?.take(80) ?: ""}"
+                else -> "Playback failed"
+            }
+
+            val channelName = metadata.title ?: metadata.id
+            val msg = "⚠  ${channelName}\n\n${reason}\n\nPress ◀ ▶ to switch channel"
+
+            view?.post { hideLoading(); showPlaybackError(msg) }
         }
     }
 
@@ -842,5 +1161,8 @@ class NowPlayingFragment : VideoSupportFragment() {
 
         /** Default time used when skipping playback in milliseconds */
         private val SKIP_PLAYBACK_MILLIS: Long = TimeUnit.SECONDS.toMillis(10)
+
+        private const val ACTION_AUDIO_ID   = 1001L
+        private const val ACTION_QUALITY_ID = 1002L
     }
 }

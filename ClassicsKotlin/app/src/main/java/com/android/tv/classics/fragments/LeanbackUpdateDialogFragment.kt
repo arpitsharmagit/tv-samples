@@ -10,6 +10,7 @@ import androidx.leanback.app.GuidedStepSupportFragment
 import androidx.leanback.widget.GuidanceStylist
 import androidx.leanback.widget.GuidedAction
 import androidx.lifecycle.lifecycleScope
+import com.android.tv.classics.BuildConfig
 import com.android.tv.classics.R
 import com.android.tv.classics.utils.AppUpdateManager
 import kotlinx.coroutines.Dispatchers
@@ -73,20 +74,22 @@ class LeanbackUpdateDialogFragment : GuidedStepSupportFragment() {
     }
     
     override fun onCreateGuidance(savedInstanceState: Bundle?): GuidanceStylist.Guidance {
-        val title = "Update Available"
-        val description = "A new version of Jasmine TV is available. " +
-                "Would you like to update now?\n\nVersion ${updateInfo.versionName}\n\n" +
-                if (updateInfo.releaseNotes.isNotEmpty()) {
-                    "What's New:\n${updateInfo.releaseNotes}"
-                } else {
-                    ""
-                }
-        
-        // Use app icon as the banner image
+        val description = buildString {
+            append("Version ${updateInfo.versionName} is available")
+            if (updateInfo.releaseName.isNotEmpty() && updateInfo.releaseName != updateInfo.versionName) {
+                append(" — ${updateInfo.releaseName}")
+            }
+            if (updateInfo.publishedAt.isNotEmpty()) {
+                append("\nReleased: ${updateInfo.publishedAt.take(10)}")
+            }
+            if (updateInfo.releaseNotes.isNotEmpty()) {
+                append("\n\nWhat's New:\n${updateInfo.releaseNotes.take(400)}")
+            }
+        }
         return GuidanceStylist.Guidance(
-            title,
+            "Update Available",
             description,
-            "", // No subheading
+            "Current: ${BuildConfig.VERSION_NAME}",
             requireContext().getDrawable(R.mipmap.ic_launcher)
         )
     }
@@ -96,12 +99,12 @@ class LeanbackUpdateDialogFragment : GuidedStepSupportFragment() {
         val updateAction = GuidedAction.Builder(context)
             .id(ACTION_ID_UPDATE)
             .title("Update Now")
-            .description("Install version ${updateInfo.versionName}")
+            .description("Download & install ${updateInfo.versionName}")
             .build()
         actions.add(updateAction)
         
-        // Add cancel button (unless force update)
-        if (!updateInfo.forceUpdate) {
+        // Always show cancel — force-update not needed for TV app
+        if (true) {
             val cancelAction = GuidedAction.Builder(context)
                 .id(ACTION_ID_CANCEL)
                 .title("Later")
@@ -133,7 +136,7 @@ class LeanbackUpdateDialogFragment : GuidedStepSupportFragment() {
                     stopProgressTracking()
                     isDownloading = false
                 }
-                requireActivity().finish()
+                parentFragmentManager.popBackStack()
             }
         }
     }

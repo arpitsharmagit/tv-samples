@@ -25,6 +25,7 @@ import android.os.Bundle
 import android.util.Log
 import android.view.View
 import androidx.leanback.app.BrowseSupportFragment
+import androidx.leanback.app.GuidedStepSupportFragment
 import androidx.leanback.widget.ArrayObjectAdapter
 import androidx.leanback.widget.HeaderItem
 import androidx.leanback.widget.ListRow
@@ -54,7 +55,11 @@ import coil.api.getAny
 import coil.bitmappool.BitmapPool
 import coil.transform.Transformation
 import com.android.tv.classics.activities.LogViewerActivity
+import com.android.tv.classics.BuildConfig
+import com.android.tv.classics.LiveTvApplication
+import com.android.tv.classics.fragments.LeanbackUpdateDialogFragment
 import com.android.tv.classics.presenters.TvMediaMetadataPresenter
+import com.android.tv.classics.utils.AppUpdateManager
 import com.android.tv.classics.utils.TvLauncherUtils
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Job
@@ -93,11 +98,11 @@ class MediaBrowserFragment : BrowseSupportFragment() {
         override fun areContentsTheSame(
                 oldItem: ListRow, newItem: ListRow) = oldItem.hashCode() == newItem.hashCode()
         override fun areItemsTheSame(
-                oldItem: ListRow, newItem: ListRow): Boolean  =
+                oldItem: ListRow, newItem: ListRow): Boolean =
                 oldItem.headerItem == newItem.headerItem &&
                         oldItem.adapter.size() == newItem.adapter.size() &&
                         (0 until oldItem.adapter.size()).all { idx ->
-                            oldItem.adapter.get(idx) == oldItem.adapter.get(idx)
+                            oldItem.adapter.get(idx) == newItem.adapter.get(idx)  // was oldItem == oldItem (bug)
                         }
     }
 
@@ -141,10 +146,11 @@ class MediaBrowserFragment : BrowseSupportFragment() {
         // When user clicks on an item, navigate to the appropriate screen
         setOnItemViewClickedListener { _, item, _, _ ->
             val metadata = item as TvMediaMetadata
-            if (metadata.id == "log_viewer") {
-                startActivity(Intent(requireContext(), LogViewerActivity::class.java))
-            } else {
-                Navigation.findNavController(
+            when (metadata.id) {
+                "log_viewer"      -> startActivity(Intent(requireContext(), LogViewerActivity::class.java))
+                "check_updates"   -> checkForUpdatesManually()
+                "hidden_channels" -> showHiddenChannels()
+                else -> Navigation.findNavController(
                         requireActivity(), R.id.fragment_container).navigate(
                         MediaBrowserFragmentDirections.actionToNowPlaying(metadata))
             }
@@ -159,11 +165,14 @@ class MediaBrowserFragment : BrowseSupportFragment() {
         // Keep track of the synchronization work so we can join it later
         synchronizeJob = lifecycleScope.launch(Dispatchers.IO) {
 
-            // Now that the fragment has been created, we can populate our adapter
+            // Show cached DB data immediately — no network wait
             populateAdapter(adapter as ArrayObjectAdapter)
 
-            // Start a one-off synchronization job when fragment is shown, bypassing work manager
+            // Sync with server in background
             TvMediaSynchronizer.synchronize(requireContext())
+
+            // Refresh adapter with any new/removed channels from the sync
+            populateAdapter(adapter as ArrayObjectAdapter)
         }
 
         // Pick a random background for our fragment
@@ -195,30 +204,20 @@ class MediaBrowserFragment : BrowseSupportFragment() {
                 })
             }
 
-            // Set background in main thread
+            // Set background and restore focus — don't block on network sync
             withContext(Dispatchers.Main) {
                 view.background = sizedBackground
                 view.backgroundTintMode = PorterDuff.Mode.OVERLAY
                 view.backgroundTintList = ColorStateList.valueOf(currentTintColor)
-            }
 
-            // Wait for the synchronization to end, then we can see if we need to update the UI
-            synchronizeJob.join()
-
-            // Handle special case where the app had no data available e.g. after clearing app data
-            val collectionAdapter = adapter as ArrayObjectAdapter
-            if (collectionAdapter.size() <= 1) populateAdapter(collectionAdapter)
-            
-            // Restore focus state if available
-            withContext(Dispatchers.Main) {
                 try {
                     com.android.tv.classics.utils.FocusManager.restoreFocusState(
-                        this@MediaBrowserFragment, 
-                        R.id.media_browser_fragment, 
+                        this@MediaBrowserFragment,
+                        R.id.media_browser_fragment,
                         view
                     )
                 } catch (e: Exception) {
-                    Timber.e( "Error restoring focus", e)
+                    Timber.e("Error restoring focus", e)
                 }
             }
         } }
@@ -251,26 +250,46 @@ class MediaBrowserFragment : BrowseSupportFragment() {
 
     /**
      * Convenience function used to populate the main screen's adapter with all media collections.
-     * Since this function makes use of the database, it cannot be run from the main thread.
+     * DB queries run on the caller's IO context; adapter writes are dispatched to the main thread.
      */
-    private fun populateAdapter(adapter: ArrayObjectAdapter) {
-        val rowCount = adapter.size()
-
+    private suspend fun populateAdapter(adapter: ArrayObjectAdapter) {
+        // All DB reads happen on the caller's IO dispatcher
         val collections = database.collections().findAll()
-        // Single query for all metadata, then group in memory (avoids N+1 DB queries)
-        val metadataByCollection = database.metadata().findAll().groupBy { it.collectionId }
+        val favorites = database.metadata().findFavorites()
+        // Single query for all visible (non-hidden) metadata, then group in memory
+        val metadataByCollection = database.metadata().findAllNonHidden()
+            .groupBy { it.collectionId }
 
-        val collectionRows = collections.mapIndexed { idx, collection ->
-            val header = HeaderItem(idx.toLong(), collection.title)
-            val listRowAdapter = ArrayObjectAdapter(TvMediaMetadataPresenter()).apply {
+        val collectionRows = mutableListOf<ListRow>()
+
+        // ★ Favourites row — only shown when at least one channel is favourited
+        if (favorites.isNotEmpty()) {
+            val favHeader = HeaderItem(0L, "★ Favourites")
+            val favAdapter = ArrayObjectAdapter(TvMediaMetadataPresenter(onLongClick = { showChannelOptions(it) })).apply {
+                setItems(favorites, null)
+            }
+            collectionRows.add(ListRow(favHeader, favAdapter))
+        }
+
+        collections.forEachIndexed { idx, collection ->
+            val header = HeaderItem((idx + 1).toLong(), collection.title)
+            val listRowAdapter = ArrayObjectAdapter(TvMediaMetadataPresenter(onLongClick = { showChannelOptions(it) })).apply {
                 setItems(metadataByCollection[collection.id] ?: emptyList<TvMediaMetadata>(), null)
             }
-            ListRow(header, listRowAdapter)
-        }.toMutableList()
+            collectionRows.add(ListRow(header, listRowAdapter))
+        }
 
-        // Add Log Viewer row at the end
-        val logViewerHeader = HeaderItem(collections.size.toLong(), "Log Viewer")
-        val logViewerAdapter = ArrayObjectAdapter(TvMediaMetadataPresenter()).apply {
+        // Settings row
+        val settingsHeader = HeaderItem((collections.size + 1).toLong(), "Settings")
+        val settingsAdapter = ArrayObjectAdapter(TvMediaMetadataPresenter()).apply {
+            add(TvMediaMetadata(
+                id = "hidden_channels",
+                title = "Manage Hidden Channels",
+                lang = "6",
+                collectionId = "8",
+                contentUri = Uri.EMPTY,
+                artUri = null
+            ))
             add(TvMediaMetadata(
                 id = "log_viewer",
                 title = "View Application Logs",
@@ -279,26 +298,91 @@ class MediaBrowserFragment : BrowseSupportFragment() {
                 contentUri = Uri.EMPTY,
                 artUri = null
             ))
+            add(TvMediaMetadata(
+                id = "check_updates",
+                title = "Check for Updates",
+                lang = "6",
+                collectionId = "8",
+                contentUri = Uri.EMPTY,
+                artUri = null
+            ))
         }
-        collectionRows.add(ListRow(logViewerHeader, logViewerAdapter))
+        collectionRows.add(ListRow(settingsHeader, settingsAdapter))
 
-        // Add all rows at once using our diff callback for a smooth animation
-        adapter.setItems(collectionRows, listRowDiffCallback)
-
-        // If we are being requested to scroll to a specific channel, find its index now
-        // NOTE: We can't use args by navArgs() because this fragment is startDestination
-        val scrollPosition = arguments?.let {
+        // Resolve scroll target on IO before switching threads
+        val channelId = arguments?.let {
             MediaBrowserFragmentArgs.fromBundle(it)
-        }?.channelId?.let { channelId ->
-            collections.indexOfFirst { it.id == channelId }.coerceAtLeast(0)
-        } ?: 0
+        }?.channelId
 
-        // If user requested to see a specific channel or collections changed, scroll automatically
-        if (scrollPosition != selectedPosition || rowCount != adapter.size()) {
-            view?.postDelayed({
-                setSelectedPosition(scrollPosition, true)
-                Timber.d("Requesting scrolling to $scrollPosition")
-            }, BACKGROUND_ANIMATION_MILLIS)
+        // Switch to main thread, defer to next UI cycle via view.post so any in-progress
+        // layout pass completes before we touch the adapter.
+        withContext(Dispatchers.Main) {
+            val rowCount = adapter.size()
+            // Use null diff callback (notifyChanged full rebind) instead of DiffCallback —
+            // Leanback's GridLayoutManager crashes with IndexOutOfBoundsException during
+            // position-based remove/insert animations when the row count changes.
+            view?.post {
+                adapter.setItems(collectionRows, null)
+
+                val scrollPosition = channelId?.let { id ->
+                    collections.indexOfFirst { it.id == id }.coerceAtLeast(0)
+                } ?: 0
+
+                if (scrollPosition != selectedPosition || rowCount != adapter.size()) {
+                    view?.postDelayed({
+                        setSelectedPosition(scrollPosition, true)
+                        Timber.d("Requesting scrolling to $scrollPosition")
+                    }, BACKGROUND_ANIMATION_MILLIS)
+                }
+            }
+        }
+    }
+
+    /** Shows the hold-OK options popup for [metadata]. Must be called from the main thread. */
+    private fun showChannelOptions(metadata: TvMediaMetadata) {
+        ChannelOptionsFragment.newInstance(metadata) { action ->
+            lifecycleScope.launch(Dispatchers.IO) {
+                when (action) {
+                    "favorite" -> {
+                        metadata.favorite = !metadata.favorite
+                        database.metadata().update(metadata)
+                    }
+                    "hide" -> {
+                        metadata.hidden = true
+                        metadata.favorite = false
+                        database.metadata().update(metadata)
+                    }
+                }
+                populateAdapter(adapter as ArrayObjectAdapter)
+            }
+        }.also { fragment ->
+            GuidedStepSupportFragment.add(requireActivity().supportFragmentManager, fragment)
+        }
+    }
+
+    /** Opens the hidden-channels manager. */
+    private fun showHiddenChannels() {
+        HiddenChannelsFragment.onChannelsChanged = {
+            lifecycleScope.launch(Dispatchers.IO) {
+                populateAdapter(adapter as ArrayObjectAdapter)
+            }
+        }
+        GuidedStepSupportFragment.add(requireActivity().supportFragmentManager, HiddenChannelsFragment())
+    }
+
+    /** Triggered when user manually selects "Check for Updates". */
+    private fun checkForUpdatesManually() {
+        LiveTvApplication.showToast("Checking for updates…")
+        lifecycleScope.launch {
+            val updateInfo = withContext(Dispatchers.IO) {
+                AppUpdateManager(requireContext()).checkForUpdates()
+            }
+            if (!isAdded) return@launch
+            if (updateInfo.isUpdateAvailable) {
+                LeanbackUpdateDialogFragment.show(requireActivity(), updateInfo)
+            } else {
+                LiveTvApplication.showToast("You're on the latest version (${BuildConfig.VERSION_NAME})")
+            }
         }
     }
 

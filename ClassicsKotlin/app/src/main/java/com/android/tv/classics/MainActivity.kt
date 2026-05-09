@@ -16,6 +16,7 @@
 
 package com.android.tv.classics
 
+import android.app.AlertDialog
 import android.content.Intent
 import android.Manifest
 import android.content.pm.PackageManager
@@ -75,8 +76,8 @@ class MainActivity : FragmentActivity() {
         appUpdateManager = AppUpdateManager(this)
         appUpdateManager.initialize()
         
-        // Check for updates
-        // checkForAppUpdates()
+        // Check for updates on startup (silent — only shows dialog if update is available)
+        checkForAppUpdates()
 
 
 
@@ -344,6 +345,24 @@ class MainActivity : FragmentActivity() {
         }
     }
     
+    override fun onBackPressed() {
+        val navController = try {
+            Navigation.findNavController(this, R.id.fragment_container)
+        } catch (e: Exception) { null }
+
+        val currentDest = navController?.currentDestination?.id
+        if (currentDest == R.id.media_browser_fragment) {
+            AlertDialog.Builder(this)
+                .setTitle("Exit JioTV?")
+                .setMessage("Are you sure you want to exit?")
+                .setPositiveButton("Exit") { _, _ -> finishAffinity() }
+                .setNegativeButton("Stay") { dialog, _ -> dialog.dismiss() }
+                .show()
+        } else {
+            super.onBackPressed()
+        }
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         Timber.d("onDestroy called")

@@ -76,6 +76,9 @@ data class TvMediaMetadata(
         /** Flag indicating if it's hidden from home screen channel */
         var hidden: Boolean = false,
 
+        /** Flag indicating if it's been marked as a favourite */
+        var favorite: Boolean = false,
+
         /** Flag indicating if it's added to watch next channel */
         var watchNext: Boolean = false,
 
@@ -134,11 +137,23 @@ interface TvMediaMetadataDAO {
     @Query("SELECT * FROM tvmediametadata")
     fun findAll(): List<TvMediaMetadata>
 
+    @Query("SELECT id FROM tvmediametadata")
+    fun findAllIds(): List<String>
+
+    @Query("SELECT * FROM tvmediametadata WHERE hidden = 0")
+    fun findAllNonHidden(): List<TvMediaMetadata>
+
     @Query("SELECT * FROM tvmediametadata WHERE id = :id LIMIT 1")
     fun findById(id: String): TvMediaMetadata?
 
-    @Query("SELECT * FROM tvmediametadata WHERE collectionId = :collectionId  order by playCount desc")
+    @Query("SELECT * FROM tvmediametadata WHERE collectionId = :collectionId AND hidden = 0 order by playCount desc")
     fun findByCollection(collectionId: String): List<TvMediaMetadata>
+
+    @Query("SELECT * FROM tvmediametadata WHERE favorite = 1 AND hidden = 0")
+    fun findFavorites(): List<TvMediaMetadata>
+
+    @Query("SELECT * FROM tvmediametadata WHERE hidden = 1")
+    fun findHidden(): List<TvMediaMetadata>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun insert(vararg metadata: TvMediaMetadata)
@@ -148,6 +163,9 @@ interface TvMediaMetadataDAO {
 
     @Delete
     fun delete(metadata: TvMediaMetadata)
+
+    @Delete
+    fun deleteAll(items: List<TvMediaMetadata>)
 
     @Query("DELETE FROM tvmediametadata")
     fun truncate()
