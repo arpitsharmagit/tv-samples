@@ -580,8 +580,13 @@ class NowPlayingFragment : VideoSupportFragment() {
         // Adds this program to the continue watching row, in case the user leaves before finishing
 //        addWatchNext()
 
-        // Initializes the video player
-        player = ExoPlayerFactory.newSimpleInstance(requireContext())
+        // Initializes the video player.
+        // Enable decoder fallback so ExoPlayer automatically retries with the next available
+        // decoder (software or alternate hardware) when the primary one (e.g., OMX.MTK.VIDEO.DECODER.AVC
+        // on OnePlus/MediaTek TVs) fails to initialise.
+        val renderersFactory = DefaultRenderersFactory(requireContext())
+            .setEnableDecoderFallback(true)
+        player = SimpleExoPlayer.Builder(requireContext(), renderersFactory).build()
         player.addListener(PlayerEventListener())
 //        player.addAnalyticsListener(EventLogger(null))
         mediaSession = MediaSessionCompat(requireContext(), getString(R.string.app_name))
@@ -1134,8 +1139,11 @@ class NowPlayingFragment : VideoSupportFragment() {
             val reason = when (error.type) {
                 ExoPlaybackException.TYPE_SOURCE ->
                     "Stream unavailable — source error\n${error.sourceException?.message?.take(80) ?: ""}"
-                ExoPlaybackException.TYPE_RENDERER ->
-                    "Playback error — renderer failure\n${error.rendererException?.message?.take(80) ?: ""}"
+                ExoPlaybackException.TYPE_RENDERER -> {
+                    val msg = error.rendererException?.message ?: ""
+                    Timber.w("Renderer error (decoder fallback may have been attempted): $msg")
+                    "Playback error — renderer failure\n${msg.take(80)}"
+                }
                 ExoPlaybackException.TYPE_UNEXPECTED ->
                     "Unexpected error\n${error.unexpectedException?.message?.take(80) ?: ""}"
                 else -> "Playback failed"
