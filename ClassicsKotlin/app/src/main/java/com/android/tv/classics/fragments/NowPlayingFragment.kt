@@ -421,7 +421,12 @@ class NowPlayingFragment : VideoSupportFragment() {
                 val mediaSource = prepareMediaSource(
                     metadata.contentUri, hashMap, isDash, dashKeyUrl, drmLicenseHeaders
                 )
-                player.prepare(mediaSource, false, true)
+                // Stop the player first to force release of any held secure decoder
+                // (OMX.MTK.VIDEO.DECODER.AVC.secure on MediaTek). Without this, switching
+                // from a DRM channel leaves the secure decoder locked and the next channel
+                // fails with "Decoder init failed".
+                player.stop()
+                player.prepare(mediaSource, true, true)
 
                 val subTitleFormat = SimpleDateFormat("EEE dd MMM HH:mm a", Locale.US)
                 subTitleFormat.timeZone = TimeZone.getDefault()
