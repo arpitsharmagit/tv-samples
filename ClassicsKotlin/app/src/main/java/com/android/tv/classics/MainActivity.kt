@@ -279,16 +279,9 @@ class MainActivity : FragmentActivity() {
         ){
             Timber.d("Mobile No. "+ LiveTvApplication.getMobileNumber()+ " AuthHeaders Found.")
             hasShownContent = true
-            // Navigate to browser immediately — don't block on token refresh
+            // Navigate to browser immediately — token valid for 10 days, no refresh needed.
             Navigation.findNavController(activity, R.id.fragment_container)
                 .navigate(NavGraphDirections.actionToMediaBrowser())
-            lifecycleScope.launch {
-                try {
-                    TvLauncherUtils.refreshToken()
-                } catch (e: Exception) {
-                    Timber.e( "Error refreshing token", e)
-                }
-            }
             // Auto-resume last playing channel if one was saved
             val lastChannelId = LiveTvApplication.getPrefStore().getData("lastChannelId")
             if (lastChannelId != null) {

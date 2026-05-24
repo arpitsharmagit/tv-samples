@@ -53,7 +53,7 @@ data class TvMediaCollection(
 @Dao
 interface TvMediaCollectionDAO {
 
-    @Query("SELECT * FROM tvmediacollection where id in (5,6,7,8,9,10,12,13,15,16) ORDER BY orderBy ASC")
+    @Query("SELECT * FROM tvmediacollection ORDER BY orderBy ASC")
     fun findAll(): List<TvMediaCollection>
 
     @Query("SELECT id FROM tvmediacollection")

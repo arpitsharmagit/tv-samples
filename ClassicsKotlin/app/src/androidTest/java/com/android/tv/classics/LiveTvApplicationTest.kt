@@ -1,18 +1,20 @@
 package com.android.tv.classics
 
-import org.junit.jupiter.api.Assertions.*
+import org.junit.After
+import org.junit.Before
+import org.junit.Test
 
 class LiveTvApplicationTest {
 
-    @org.junit.jupiter.api.BeforeEach
+    @Before
     fun setUp() {
     }
 
-    @org.junit.jupiter.api.AfterEach
+    @After
     fun tearDown() {
     }
 
-    @org.junit.jupiter.api.Test
+    @Test
     fun onCreate() {
     }
 }

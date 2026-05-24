@@ -24,7 +24,6 @@ import android.net.Uri
 import android.util.Log
 import android.util.Rational
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.resume
 import android.widget.Toast
@@ -36,14 +35,12 @@ import androidx.tvprovider.media.tv.TvContractCompat
 import androidx.tvprovider.media.tv.WatchNextProgram
 import com.android.tv.classics.LiveTvApplication
 import com.android.tv.classics.R
-import com.android.tv.classics.jio.Constants
-import com.android.tv.classics.jio.JioAPI
+import com.android.tv.classics.jio.ConstantsV2
+import com.android.tv.classics.jio.JioAPIv2
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
 import com.android.tv.classics.models.TvMediaCollection
 import com.android.tv.classics.models.TvMediaMetadata
-import com.androidnetworking.error.ANError
-import com.androidnetworking.interfaces.JSONObjectRequestListener
-import com.androidnetworking.interfaces.OkHttpResponseListener
-import okhttp3.Response
 import org.json.JSONObject
 import timber.log.Timber
 
@@ -404,96 +401,116 @@ class TvLauncherUtils private constructor() {
         }
 
         suspend fun refreshToken() = withContext(Dispatchers.IO) {
-            val headers = LiveTvApplication.getAuthHeaders()
+            val session = LiveTvApplication.getAuthHeaders()
             try {
-                val request = JioAPI.refreshToken(headers)
-                val response = withContext(Dispatchers.IO) {
-                    suspendCancellableCoroutine<JSONObject> { continuation ->
-                        request.getAsJSONObject(object : JSONObjectRequestListener {
-                            override fun onResponse(response: JSONObject) {
-                                if (continuation.isActive) {
-                                    if (response.has("data") && response.getJSONObject("data").has("authToken")) {
-                                        val updatedHeaders = headers.toMutableMap()
-                                        val authToken = response.getJSONObject("data").getString("authToken")
-                                        updatedHeaders["authToken"] = authToken
-                                        LiveTvApplication.setAuthHeaders(updatedHeaders)
-                                        Timber.d("Refreshed Token and updated")
-                                    } else {
-                                        Timber.d("No auth token in response")
-                                    }
-                                    continuation.resume(response)
-                                }
-                            }
-                            
-                            override fun onError(error: ANError) {
-                                if (continuation.isActive) {
-                                    Timber.e( "Unable to Refresh Token.", error.cause)
-                                    continuation.resume(JSONObject())
-                                }
-                            }
-                        })
-                        
-                        continuation.invokeOnCancellation {
-                            request.cancel(true)
-                        }
-                    }
+                val newToken = JioAPIv2.refreshToken(session)
+                if (newToken != null) {
+                    val updated = session.toMutableMap()
+                    updated[ConstantsV2.KEY_AUTH_TOKEN] = newToken
+                    LiveTvApplication.setAuthHeaders(updated)
+                    Timber.d("Token refreshed via v2 API")
+                } else {
+                    Timber.w("Token refresh returned null — session may be expired")
                 }
-                
-
             } catch (e: Exception) {
-                Timber.e( "Error refreshing token", e)
+                Timber.e(e, "Error refreshing token")
             }
         }
 
-        fun sendOTP(mobileNumber: String){
+        /**
+         * Step 1 of v2 auth: sends OTP via JioTVPlus STB endpoint.
+         * Stores the returned identifier and mobile number for the verify step.
+         */
+        fun sendOTP(mobileNumber: String) {
             val mobileNumberComplete = "+91$mobileNumber"
-            JioAPI.sendOTP(mobileNumberComplete)
-                .getAsOkHttpResponse(object : OkHttpResponseListener {
-                    override fun onResponse(response: Response) {
-                        if (response.code == 204) {
-                            LiveTvApplication.setMobileNumber(mobileNumber)
-                            LiveTvApplication.showToast("Successfully sent OTP to $mobileNumberComplete")
-                        }
-                    }
-                    override fun onError(anError: ANError) {
-                        LiveTvApplication.showToast("Error: $anError.errorBody")
-                    }
-                })
+            GlobalScope.launch(Dispatchers.Main) {
+                val identifier = JioAPIv2.sendOTP(mobileNumber)
+                if (identifier != null) {
+                    LiveTvApplication.setMobileNumber(mobileNumber)
+                    LiveTvApplication.setOtpIdentifier(identifier)
+                    LiveTvApplication.showToast("Successfully sent OTP to $mobileNumberComplete")
+                    Timber.d("sendOTP: identifier=$identifier")
+                } else {
+                    LiveTvApplication.showToast("Error sending OTP to $mobileNumberComplete")
+                }
+            }
         }
 
-        fun verifyOTP(otp: String){
-            val mobileNumber = "+91${LiveTvApplication.getMobileNumber()}"
-            JioAPI.verifyOTP(mobileNumber, otp).getAsJSONObject(object:JSONObjectRequestListener{
-                override fun onResponse(response: JSONObject?) {
-                    response?.let {
-                        val headers: MutableMap<String, Any> = mutableMapOf()
-                        val userDetails = it.getJSONObject("sessionAttributes").getJSONObject("user")
+        /**
+         * Steps 2+3 of v2 auth: verifies OTP (STB endpoint) then exchanges the ssoToken
+         * for a JioTVPlus authToken + refreshToken via exchangeToken.
+         *
+         * The resulting session map contains all fields needed for content and playback requests.
+         */
+        fun verifyOTP(otp: String) {
+            val mobileNumber = LiveTvApplication.getMobileNumber()
+            val identifier   = LiveTvApplication.getOtpIdentifier()
 
-                        headers[Constants.AUTH_TOKEN] = it.getString("authToken")
-                        headers[Constants.REFRESH_TOKEN] = it.getString("refreshToken")
-                        headers[Constants.SSO_TOKEN] = it.getString("ssoToken")
-                        headers[Constants.USER_ID] = userDetails.getString("uid")
-                        headers[Constants.UNIQUE_ID] = userDetails.getString("unique")
-                        headers[Constants.CRM_ID] = userDetails.getString("subscriberId")
-                        headers[Constants.APP_KEY] = Constants.VALUES.APP_KEY
-                        headers[Constants.DEVICE_ID] = Constants.VALUES.DEVICE_ID
-                        headers[Constants.OS] = Constants.VALUES.OS
-                        headers[Constants.VERSION_CODE] = Constants.VALUES.VERSION_CODE
-                        headers[Constants.DEVICE_TYPE] = Constants.VALUES.DEVICE_TYPE
-                        headers[Constants.USER_GROUP] = Constants.VALUES.USER_GROUP
-                        headers[Constants.LBCOOKIES] = Constants.VALUES.LBCOOKIES
-                        headers[Constants.USER_AGENT] = Constants.VALUES.USER_AGENT
+            if (identifier.isNullOrEmpty()) {
+                LiveTvApplication.showToast("Session expired — please re-enter your mobile number")
+                return
+            }
 
-                        LiveTvApplication.getCloudDatabase().setValue(headers)
-                        LiveTvApplication.setAuthHeaders(headers)
-                        LiveTvApplication.showToast("Successfully logged in with $mobileNumber")
-                    }
+            GlobalScope.launch(Dispatchers.Main) {
+                // Step 2: verify OTP → get ssoToken + uniqueId + subscriberId
+                val verifyResp = JioAPIv2.verifyOTP(
+                    identifier = identifier,
+                    otp        = otp,
+                    deviceId   = ConstantsV2.Values.DEVICE_ID
+                )
+
+                if (!verifyResp.has("ssoToken")) {
+                    LiveTvApplication.showToast("OTP verification failed")
+                    Timber.e("verifyOTP: no ssoToken in response")
+                    return@launch
                 }
 
-                override fun onError(anError: ANError?) {
-                    LiveTvApplication.showToast("Verify OTP Error: ${anError?.message}")
+                val ssoToken     = verifyResp.optString("ssoToken")
+                val userDetails  = verifyResp.optJSONObject("sessionAttributes")
+                    ?.optJSONObject("user") ?: org.json.JSONObject()
+                val uniqueId     = userDetails.optString("unique")
+                val subscriberId = userDetails.optString("subscriberId")
+
+                // Step 3: exchange ssoToken for authToken + refreshToken
+                val exchangeResp = JioAPIv2.exchangeToken(
+                    ssoToken     = ssoToken,
+                    subscriberId = subscriberId,
+                    number       = mobileNumber ?: "",
+                    deviceId     = ConstantsV2.Values.DEVICE_ID
+                )
+
+                if (!exchangeResp.has("authToken")) {
+                    LiveTvApplication.showToast("Token exchange failed")
+                    Timber.e("exchangeToken: no authToken in response")
+                    return@launch
                 }
-            })
+
+                val authToken    = exchangeResp.optString("authToken")
+                val refreshToken = exchangeResp.optString("refreshToken")
+                val userId       = exchangeResp.optString("userId")
+                // exchangeToken may also return subscriberId; prefer it if non-empty
+                val finalSubId   = exchangeResp.optString("subscriberId").ifEmpty { subscriberId }
+
+                // Encode the mobile number for CDN request header (rmn)
+                val encodedNumber = com.android.tv.classics.jio.Utils.encodePhoneNumber("+91$mobileNumber")
+
+                val headers: MutableMap<String, Any> = mutableMapOf(
+                    ConstantsV2.KEY_AUTH_TOKEN    to authToken,
+                    ConstantsV2.KEY_REFRESH_TOKEN to refreshToken,
+                    ConstantsV2.KEY_USER_ID       to userId,
+                    ConstantsV2.KEY_SUBSCRIBER_ID to finalSubId,
+                    ConstantsV2.KEY_UNIQUE_ID     to uniqueId,
+                    ConstantsV2.KEY_SSO_TOKEN     to ssoToken,
+                    ConstantsV2.KEY_IDENTIFIER    to identifier,
+                    ConstantsV2.KEY_DEVICE_ID     to ConstantsV2.Values.DEVICE_ID,
+                    ConstantsV2.KEY_RMN           to encodedNumber
+                )
+
+                LiveTvApplication.getCloudDatabase().setValue(headers)
+                LiveTvApplication.setAuthHeaders(headers)
+                LiveTvApplication.showToast("Successfully logged in (+91$mobileNumber)")
+                Timber.d("Auth complete: userId=$userId uniqueId=$uniqueId")
+            }
         }
     }
 }

@@ -24,6 +24,7 @@ class OtpStepFragment: GuidedStepSupportFragment() {
     companion object {
         private val TAG = OtpStepFragment::class.java.simpleName
         private const val VERIFY = 1L
+        private const val OTP_ID = 2L
     }
 
     override fun onCreateGuidance(savedInstanceState: Bundle?): Guidance {
@@ -32,33 +33,25 @@ class OtpStepFragment: GuidedStepSupportFragment() {
     }
 
     override fun onCreateActions(actions: MutableList<GuidedAction>, savedInstanceState: Bundle?) {
-        val otpEditor = GuidedAction.Builder(activity).title("OTP").description("000000").descriptionEditable(true).inputType(InputType.TYPE_CLASS_NUMBER).build()
+        val otpEditor = GuidedAction.Builder(activity).id(OTP_ID).title("OTP").description("").descriptionEditable(true).inputType(InputType.TYPE_CLASS_NUMBER).build()
         val verifyAction = GuidedAction.Builder(activity).id(VERIFY).title("VERIFY").build()
         actions.add(otpEditor)
         actions.add(verifyAction)
     }
-    
-    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        super.onViewCreated(view, savedInstanceState)
-        
-        // Restore focus state if available
-        try {
-            view.post {
-                FocusManager.restoreFocusState(
-                    this, 
-                    R.id.otp_step_fragment, 
-                    view
-                )
-            }
-        } catch (e: Exception) {
-            Timber.e( "Error restoring focus", e)
+
+    override fun onResume() {
+        super.onResume()
+        // Auto-open the OTP input field so the user can start typing immediately
+        view?.post {
+            setSelectedActionPosition(0)
+            try { openInEditMode(findActionById(OTP_ID)) } catch (_: Exception) {}
         }
     }
 
     override fun onGuidedActionClicked(action: GuidedAction?) {
         if(action!!.id == VERIFY){
-            val otp = actions[0].description.toString()
-            if(otp.length != 6 || otp == "000000"){
+            val otp = findActionById(OTP_ID)?.description?.toString() ?: ""
+            if(otp.length != 6){
                 LiveTvApplication.showToast("Please enter 6 digit OTP.")
                 return
             }
@@ -74,24 +67,9 @@ class OtpStepFragment: GuidedStepSupportFragment() {
             }
         }
     }
-    
-    override fun onStop() {
-        super.onStop()
-        
-        // Save focus state when stopping
-        try {
-            FocusManager.saveFocusState(
-                this,
-                R.id.otp_step_fragment
-            )
-        } catch (e: Exception) {
-            Timber.e( "Error saving focus", e)
-        }
-    }
-    
+
     override fun onDestroy() {
         super.onDestroy()
-        // Cancel any ongoing coroutine operations if needed
         lifecycleScope.coroutineContext.cancelChildren()
     }
 }

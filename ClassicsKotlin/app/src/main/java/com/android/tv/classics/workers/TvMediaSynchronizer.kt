@@ -18,18 +18,17 @@ package com.android.tv.classics.workers
 
 import android.content.Context
 import android.net.Uri
-import android.util.Log
 import androidx.work.Worker
 import androidx.work.WorkerParameters
-import com.android.tv.classics.jio.Constants
-import com.android.tv.classics.jio.JioAPI
+import com.android.tv.classics.LiveTvApplication
+import com.android.tv.classics.jio.ConstantsV2
+import com.android.tv.classics.jio.JioAPIv2
 import com.android.tv.classics.models.*
 import com.android.tv.classics.utils.TvLauncherUtils
 import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONObject
 import timber.log.Timber
-import java.nio.charset.StandardCharsets
 
 /** Maps a JSONArray of strings */
  fun <T>JSONArray.mapString(transform: (String) -> T): List<T> =
@@ -58,81 +57,56 @@ class TvMediaSynchronizer(private val context: Context, params: WorkerParameters
     companion object {
         private val TAG = TvMediaSynchronizer::class.java.simpleName
 
-        /** Fetches the metadata feed from our assets folder and parses its metadata */
+        /** Fetches the metadata feed from the v2 API and parses it into Room entities */
         private suspend fun parseMediaFeed(context: Context): FeedParseResult {
-            try {
-                // Get channels data from API with error handling
-                val data = JioAPI.getChannels()
-                
-                // Initializes an empty list to populate with metadata metadata
-                val metadatas: MutableList<TvMediaMetadata> = mutableListOf()
-    
-                // Read genre data from assets file
-                val genreData = try {
-                    val genreStream = context.resources.assets.open("jio-genre-map.json")
-                    JSONObject(String(genreStream.readBytes(), StandardCharsets.UTF_8))
-                } catch (e: Exception) {
-                    Timber.e( "Error reading genre data", e)
-                    // Provide fallback data if file can't be read
-                    JSONObject().apply { 
-                        put("genre", JSONArray())
-                    }
-                }
-    
-                // Safely get genre array
-                val genreArray = if (genreData.has("genre")) 
-                    genreData.getJSONArray("genre") 
-                else 
-                    JSONArray()
-                    
-                // Traverses the feed and maps each genre
-                val genres = genreArray.mapObject { obj ->
-                    TvMediaCollection(
-                        id = obj.optString("id", "0"),
-                        title = obj.optString("title", "Unknown"),
-                        description = obj.optString("description", ""),
-                        artUri = obj.optString("image", "")?.let { if (it.isNotEmpty()) Uri.parse(it) else null },
-                        orderBy = obj.optInt("order", 0))
+            return try {
+                val session = LiveTvApplication.getAuthHeaders()
+                val channelsResp = JioAPIv2.getChannels(session)
+
+                if (channelsResp.data.isEmpty()) {
+                    Timber.w("v2 getChannels returned empty data map")
+                    return FeedParseResult(emptyList(), emptyList())
                 }
 
-            try {
-                // Safely get the 'result' array or empty array if it doesn't exist
-                val resultArray = if (data.has("result")) data.getJSONArray("result") else JSONArray()
-                
-                // Traverses the feed and maps each collection
-                val channels = resultArray.mapObject { obj ->
-                    // Traverses the collection and map each content item metadata
-                    // Use optString/optInt for safer JSON parsing
-                    val logoUrl = obj.optString("logoUrl", "")
-                    val contentUri = if (logoUrl.isNotEmpty()) 
-                        Uri.parse(Constants.imageUrl + logoUrl) 
-                    else 
-                        Uri.EMPTY
-                        
-                    TvMediaMetadata(
-                        collectionId = obj.optString("channelCategoryId", "0"),
-                        id = obj.optString("channel_id", "0"),
-                        title = obj.optString("channel_name", "Unknown Channel"),
-                        lang = obj.optString("channelLanguageId", "1"),
-                        contentUri = contentUri,
-                        artUri = contentUri)
+                // Derive genre collections from the unique genres across all channels
+                val genreSet = channelsResp.data.values
+                    .flatMap { it.genres }
+                    .toSortedSet()
+
+                val genres = genreSet.mapIndexed { index, genreName ->
+                    TvMediaCollection(
+                        id          = genreName,
+                        title       = genreName,
+                        description = "$genreName channels",
+                        artUri      = null,
+                        orderBy     = index
+                    )
                 }
-    
-                // Filter channels by language
-                val myChannels = channels.filter { it.lang in listOf("1", "6", "3") }
-    
-                metadatas.addAll(myChannels)
-                return FeedParseResult(metadatas, genres)
+
+                // Map channels, filtering to allowed languages only
+                val channels = channelsResp.data.values
+                    .filter { it.language in ConstantsV2.ALLOWED_LANGUAGES }
+                    .map { ch ->
+                        val primaryGenre = ch.genres.firstOrNull() ?: "Entertainment"
+                        val thumbUri = ch.thumbnail.takeIf { it.isNotEmpty() }
+                            ?.let { Uri.parse(it) } ?: Uri.EMPTY
+
+                        TvMediaMetadata(
+                            collectionId = primaryGenre,
+                            id           = ch.contentId,
+                            title        = ch.name,
+                            lang         = ch.language,
+                            contentUri   = thumbUri,
+                            artUri       = thumbUri
+                        )
+                    }
+
+                Timber.d("v2 parseMediaFeed: ${channels.size} channels, ${genres.size} genres")
+                FeedParseResult(channels, genres)
             } catch (e: Exception) {
-                Timber.e( "Error processing channels data", e)
-                // Return empty result if there's an error
-                return FeedParseResult(emptyList(), genres)
+                Timber.e(e, "Fatal error in parseMediaFeed")
+                FeedParseResult(emptyList(), emptyList())
             }
-        } catch (e: Exception) {
-            Timber.e( "Fatal error in parseMediaFeed", e)
-            // Return completely empty result in case of any exception
-            return FeedParseResult(emptyList(), emptyList())
-        }
         }
 
         /** Parses metadata from our assets folder and synchronizes the database */

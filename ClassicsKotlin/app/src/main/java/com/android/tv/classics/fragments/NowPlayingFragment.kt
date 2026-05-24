@@ -48,17 +48,14 @@ import androidx.navigation.Navigation
 import androidx.navigation.fragment.navArgs
 import com.android.tv.classics.LiveTvApplication
 import com.android.tv.classics.R
-import com.android.tv.classics.jio.Constants
-import com.android.tv.classics.jio.JioAPI
+import com.android.tv.classics.jio.ConstantsV2
+import com.android.tv.classics.jio.JioAPIv2
 import com.android.tv.classics.jio.store.HttpStore
 import com.android.tv.classics.models.TvMediaDatabase
 import com.android.tv.classics.models.TvMediaEPG
 import com.android.tv.classics.models.TvMediaMetadata
 import com.android.tv.classics.presenters.TvMediaMetadataPresenter
 import com.android.tv.classics.utils.TvLauncherUtils
-import com.android.tv.classics.workers.mapObject
-import com.androidnetworking.error.ANError
-import com.androidnetworking.interfaces.JSONObjectRequestListener
 import com.google.android.exoplayer2.*
 import com.google.android.exoplayer2.C
 import com.google.android.exoplayer2.drm.DefaultDrmSessionManager
@@ -75,8 +72,6 @@ import com.google.android.exoplayer2.util.EventLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.json.JSONArray
-import org.json.JSONObject
 import timber.log.Timber
 import java.text.SimpleDateFormat
 import java.time.Instant
@@ -234,69 +229,47 @@ class NowPlayingFragment : VideoSupportFragment() {
             lifecycleScope.launch(Dispatchers.IO) {
                 // set playback row art
 //                metadata.artUri?.let { art = Coil.get(it) }
-                try {
-                    TvLauncherUtils.refreshToken()
-                } catch (e: Exception) {
-                    Timber.e( "Error refreshing token", e)
-                }
+                // Token refresh disabled — authToken is valid for 10 days.
+                // TODO: implement v2 refresh endpoint when identified.
                 
                 try {
-                    // Get EPG data with error handling
-                    val epgResponse = JioAPI.getEPG(metadata.id)
-                    
-                    // Safe access to the EPG array
-                    val epgArray = if (epgResponse.has("epg")) {
-                        epgResponse.getJSONArray("epg")
-                    } else {
-                        JSONArray()
+                    val session = LiveTvApplication.getAuthHeaders()
+                    // v2: batch EPG — fetch today (offset 0) for this channel
+                    val epgResp = JioAPIv2.getEPGBatch(
+                        channelIds = listOf(metadata.id),
+                        offsets    = listOf(0, 1),
+                        session    = session
+                    )
+
+                    val showsForChannel = epgResp.data[metadata.id] ?: emptyList()
+
+                    shows = showsForChannel.map { show ->
+                        TvMediaEPG(
+                            srno            = show.programId.take(6).toLongOrNull() ?: 0L,
+                            showId          = show.showId,
+                            showname        = show.title,
+                            description     = show.description,
+                            startEpoch      = show.startEpoch,
+                            endEpoch        = show.endEpoch,
+                            episodeThumbnail = show.thumbnail,
+                            duration        = ((show.endEpoch - show.startEpoch) / 60000).toInt().coerceAtLeast(1),
+                            isPastEpisode   = show.endEpoch < System.currentTimeMillis(),
+                            isCatchupAvailable = show.endEpoch < System.currentTimeMillis()
+                        )
                     }
-                    
-                    shows = epgArray.mapObject { obj ->
-                        // Traverses the collection and map each content item metadata using optString/optInt/etc.
-                        try {
-                            TvMediaEPG(
-                                srno = obj.optLong("srno", 0),
-                                showtime = obj.optString("showtime", ""),
-                                showname = obj.optString("showname", "Unknown Show"),
-                                description = obj.optString("description", ""),
-                                duration = obj.optInt("duration", 30),
-                                endtime = obj.optString("endtime", ""),
-                                startEpoch = obj.optLong("startEpoch", System.currentTimeMillis()),
-                                endEpoch = obj.optLong("endEpoch", System.currentTimeMillis() + 1800000), // default 30min
-                                isPastEpisode = obj.optBoolean("isPastEpisode", false),
-                                isCatchupAvailable = obj.optBoolean("isCatchupAvailable", false)
-                            )
-                        } catch (e: Exception) {
-                            Timber.e( "Error parsing EPG item", e)
-                            // Return a default item if parsing fails
-                            TvMediaEPG(
-                                srno = 0,
-                                showtime = "",
-                                showname = "Unknown Show",
-                                description = "",
-                                duration = 30,
-                                endtime = "",
-                                startEpoch = System.currentTimeMillis(),
-                                endEpoch = System.currentTimeMillis() + 1800000,
-                                isPastEpisode = false,
-                                isCatchupAvailable = false
-                            )
-                        }
-                    }
-                    
-                    // Only continue if we have show data
+
                     if (shows.isNotEmpty()) {
-                        var currentShow = findCurrentShow()
+                        val currentShow = findCurrentShow()
                         startPlayingCurrentShow(currentShow)
                     } else {
-                        Timber.e( "No EPG data available for channel ${metadata.id}")
+                        Timber.e("No EPG data available for channel ${metadata.id}")
                         withContext(Dispatchers.Main) {
                             hideLoading()
                             LiveTvApplication.showToast("No program information available")
                         }
                     }
                 } catch (e: Exception) {
-                    Timber.e( "Error processing EPG data", e)
+                    Timber.e(e, "Error processing EPG data")
                     withContext(Dispatchers.Main) {
                         hideLoading()
                         LiveTvApplication.showToast("Error loading program information")
@@ -306,109 +279,60 @@ class NowPlayingFragment : VideoSupportFragment() {
         }
     }
 
-    private suspend fun startPlayingCurrentShow(show: TvMediaEPG?){
+    private suspend fun startPlayingCurrentShow(show: TvMediaEPG?) {
         try {
-            val authHeaders = LiveTvApplication.getAuthHeaders()
+            val session = LiveTvApplication.getAuthHeaders()
 
-            val simpleDateFormat = SimpleDateFormat("yyyyMMdd'T'HHmmss", Locale.US)
-            simpleDateFormat.timeZone = TimeZone.getTimeZone("GMT")
-            val beginTime = simpleDateFormat.format(show?.startEpoch)
-            val endTime = simpleDateFormat.format(show?.endEpoch)
-            val programId = show?.srno.toString()
-            val srNo = programId.take(6)
-            val body = mapOf(
-                "channel_id" to metadata.id,
-                "stream_type" to "Seek",
-                "srno" to srNo,
-                "programId" to programId,
-                "begin" to beginTime,
-                "end" to endTime
-            )
-            // blocking I/O operation
-            val response = JioAPI.getPlaybackUrl(body, authHeaders)
+            // v2 playback: POST JSON device capabilities to /playback/v2/{channelId}
+            val playbackResp = JioAPIv2.getPlaybackUrl(metadata.id, session)
+            val playbackData = playbackResp.data
 
-            // Parse HLS URL (top-level "result" field)
-            val hlsUrl = response.optString("result").takeIf { it.isNotEmpty() }
-
-            // Parse DASH/MPD URL — API may nest it under "dash", "mpd", "dashUrl", or "mpdUrl"
-            var dashUrl: String? = null
-            var dashKeyUrl: String? = null
-            for (dashKey in listOf("dash", "mpd", "dashUrl", "mpdUrl")) {
-                if (!response.has(dashKey)) continue
-                val raw = response.get(dashKey)
-                when {
-                    raw is org.json.JSONObject -> {
-                        dashUrl = raw.optString("result").takeIf { it.isNotEmpty() }
-                        dashKeyUrl = raw.optString("key").takeIf { it.isNotEmpty() }
-                    }
-                    raw is String && raw.isNotEmpty() -> dashUrl = raw
-                }
-                if (dashUrl != null) break
+            if (playbackData == null) {
+                Timber.e("v2 playback: null data for channel ${metadata.id}")
+                withContext(Dispatchers.Main) { hideLoading() }
+                return
             }
 
-            val isDRM = response.optBoolean("isDRM", false)
-            val requiresDrm = isDRM || !dashKeyUrl.isNullOrEmpty()
+            // Prefer DASH over HLS when available
+            val dashUrl: String? = playbackData.mpd.best.takeIf { it.isNotEmpty() }
+            val hlsUrl:  String? = playbackData.m3u8.best.takeIf { it.isNotEmpty() }
+            val keyURL:  String? = playbackData.keyURL.takeIf { it.isNotEmpty() }
+            val isDash   = dashUrl != null
+            val requiresDrm = isDash && keyURL != null
 
-            // DASH is preferred over HLS when available (matches Flutter PlaybackResult.preferredUrl)
-            val isDash = dashUrl != null
             val chosenUrl = dashUrl ?: hlsUrl ?: run {
-                Timber.e("No playback URL in response: $response")
-                return@startPlayingCurrentShow
+                Timber.e("v2 playback: no stream URL for channel ${metadata.id}")
+                withContext(Dispatchers.Main) { hideLoading() }
+                return
             }
 
             metadata.contentUri = Uri.parse(chosenUrl)
-            Timber.d("Playback format: ${if (isDash) "DASH" else "HLS"}  isDRM=$requiresDrm  url=$chosenUrl")
+            Timber.d("v2 Playback: ${if (isDash) "DASH" else "HLS"}  isDRM=$requiresDrm  channel=${metadata.id}")
 
-            // Build CDN stream headers — mirrors Flutter PlayerProvider._buildStreamHeaders()
-            val getStr = { key: String ->
-                when (val v = authHeaders[key]) {
-                    is String -> v
-                    null -> ""
-                    else -> v.toString()
-                }
+            // v2 stream headers — tokens embedded in URL, minimal headers needed
+            fun str(key: String) = when (val v = session[key]) {
+                is String -> v; null -> ""; else -> v.toString()
             }
             val hashMap = hashMapOf(
-                Constants.ACCESS_TOKEN  to getStr("authToken"),
-                Constants.APP_KEY       to getStr("appkey"),
-                Constants.CHANNEL_ID    to metadata.id,
-                Constants.CRM_ID        to getStr("crmid"),
-                Constants.DEVICE_ID     to getStr("deviceId"),
-                Constants.SESSIONID     to getStr("uniqueId"),   // "sid"
-                Constants.SUBSCRIBER_ID to getStr("crmid"),
-                Constants.UNIQUE_ID     to getStr("uniqueId"),
-                Constants.USER_GROUP    to getStr("usergroup"),
-                Constants.USER_ID       to getStr("userId"),
-                Constants.VERSION_CODE  to Constants.VALUES.VERSION_CODE,
-                Constants.DM           to Constants.VALUES.DM,
-                Constants.OTT_USER     to "false",
-                Constants.LANGUAGE_ID  to Constants.VALUES.LANGUAGE_ID,
-                Constants.LBCOOKIES    to Constants.VALUES.LBCOOKIES,
-                Constants.OS_VERSION   to Constants.VALUES.OS_VERSION
+                ConstantsV2.X_ACCESS_TOKEN   to str(ConstantsV2.KEY_AUTH_TOKEN),
+                ConstantsV2.DEVICEID         to str(ConstantsV2.KEY_DEVICE_ID),
+                ConstantsV2.UNIQUEID         to str(ConstantsV2.KEY_UNIQUE_ID),
+                ConstantsV2.SUBID            to str(ConstantsV2.KEY_SUBSCRIBER_ID),
+                ConstantsV2.X_APPNAME        to ConstantsV2.Values.APP_NAME,
+                ConstantsV2.X_API_SIGNATURES to ConstantsV2.Values.API_SIGNATURES,
+                ConstantsV2.X_FEATURE_CODE   to ConstantsV2.Values.FEATURE_CODE
             )
 
-            // Fetch CDN auth cookie (strip Set-Cookie attributes, keep only "name=value")
-            val playbackCookie = JioAPI.getHeaderCookie(chosenUrl, metadata.id, authHeaders)
-            if (playbackCookie.isNotEmpty()) hashMap["Cookie"] = playbackCookie
-
-            // Build Widevine DRM license request headers — mirrors Flutter _buildLicenseHeaders()
-            val drmLicenseHeaders: Map<String, String> = if (requiresDrm && !dashKeyUrl.isNullOrEmpty()) {
+            // v2 DRM license request headers
+            val drmLicenseHeaders: Map<String, String> = if (requiresDrm) {
                 hashMapOf(
-                    "uniqueId"     to getStr("uniqueId"),
-                    "ssotoken"     to getStr("ssotoken"),
-                    "accesstoken"  to getStr("authToken"),
-                    "subscriberId" to getStr("crmid"),
-                    "deviceId"     to getStr("deviceId"),
-                    "os"           to Constants.VALUES.OS,
-                    "userId"       to getStr("userId"),
-                    "versionCode"  to Constants.VALUES.VERSION_CODE,
-                    "osVersion"    to Constants.VALUES.OS_VERSION,
-                    "crmid"        to getStr("crmid"),
-                    "srno"         to srNo,
-                    "channelid"    to metadata.id,
-                    "devicetype"   to "phone",
-                    "usergroup"    to Constants.VALUES.USER_GROUP,
-                    "lbcookie"     to Constants.VALUES.LBCOOKIES,
-                    "appkey"       to Constants.VALUES.APP_KEY
+                    ConstantsV2.X_ACCESS_TOKEN   to str(ConstantsV2.KEY_AUTH_TOKEN),
+                    ConstantsV2.UNIQUEID         to str(ConstantsV2.KEY_UNIQUE_ID),
+                    ConstantsV2.SUBID            to str(ConstantsV2.KEY_SUBSCRIBER_ID),
+                    ConstantsV2.DEVICEID         to str(ConstantsV2.KEY_DEVICE_ID),
+                    ConstantsV2.X_APPNAME        to ConstantsV2.Values.APP_NAME,
+                    ConstantsV2.X_API_SIGNATURES to ConstantsV2.Values.API_SIGNATURES,
+                    ConstantsV2.X_FEATURE_CODE   to ConstantsV2.Values.FEATURE_CODE
                 )
             } else emptyMap()
 
@@ -417,27 +341,22 @@ class NowPlayingFragment : VideoSupportFragment() {
                 hidePlaybackError()
                 hideLoading()
                 currentStreamType = if (isDash) "DASH" else "HLS"
-                // Prepares metadata playback — DASH or HLS depending on chosen URL
                 val mediaSource = prepareMediaSource(
-                    metadata.contentUri, hashMap, isDash, dashKeyUrl, drmLicenseHeaders
+                    metadata.contentUri, hashMap, isDash, keyURL, drmLicenseHeaders
                 )
-                // Stop the player first to force release of any held secure decoder
-                // (OMX.MTK.VIDEO.DECODER.AVC.secure on MediaTek). Without this, switching
-                // from a DRM channel leaves the secure decoder locked and the next channel
-                // fails with "Decoder init failed".
                 player.stop()
                 player.prepare(mediaSource, true, true)
 
                 val subTitleFormat = SimpleDateFormat("EEE dd MMM HH:mm a", Locale.US)
                 subTitleFormat.timeZone = TimeZone.getDefault()
 
-                playerGlue.title = show?.showname
-                playerGlue.subtitle =
-                    subTitleFormat.format(show?.startEpoch) + " | " + show?.duration.toString() + " mins"
+                playerGlue.title    = show?.showname
+                playerGlue.subtitle = show?.let {
+                    subTitleFormat.format(it.startEpoch) + " | ${it.duration} mins"
+                } ?: ""
             }
-        }
-        catch(e: Exception){
-            Timber.e("error occurred while playing", e)
+        } catch (e: Exception) {
+            Timber.e(e, "error occurred while playing")
             withContext(Dispatchers.Main) { hideLoading() }
         }
     }
@@ -524,20 +443,9 @@ class NowPlayingFragment : VideoSupportFragment() {
             // Updates metadata state
             metadata = args.metadata
 
-            // Refresh Token
-            LiveTvApplication.getAuthHeaders().let { headers ->
-                JioAPI.refreshToken(headers)
-                    .getAsJSONObject(object : JSONObjectRequestListener {
-                        override fun onResponse(response: JSONObject) {
-                            val updatedHeaders = headers.toMutableMap()
-                            updatedHeaders["authToken"] = response.getString("authToken")
-                            LiveTvApplication.setAuthHeaders(updatedHeaders)
-                        }
-
-                        override fun onError(error: ANError) {
-                            LiveTvApplication.showToast("Unable to Refresh Token")
-                        }
-                    })
+            // Token refresh disabled — authToken valid for 10 days.
+            // TODO: implement v2 refresh endpoint when identified.
+            // lifecycleScope.launch(Dispatchers.IO) { TvLauncherUtils.refreshToken() }
 
                 // Get New getPlaybackUrl
 //                lifecycleScope.launch(Dispatchers.IO) {
@@ -569,7 +477,6 @@ class NowPlayingFragment : VideoSupportFragment() {
                 view?.postDelayed(this, METADATA_UPDATE_INTERVAL_MILLIS)
             }
         }
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -612,15 +519,13 @@ class NowPlayingFragment : VideoSupportFragment() {
                     super.onPlayStateChanged(glue)
 
                     if (glue?.isPlaying == true && player.contentDuration > 0) {
-                        // When playback is ready, skip to last known position
-                        var currentShow = findCurrentShow()
-//                        Timber.d("DURATION ======" + player.duration.toString() +" "+ player.contentDuration+" "+player.contentPosition)
-//                        Timber.d("Range ===="+ player.contentPosition +" "+(player.contentDuration - (currentShow?.endEpoch!! - Calendar.getInstance().time.time)))
-                        val remainingShowTimeMS = (currentShow?.endEpoch!! - Calendar.getInstance().time.time)
+                        val currentShow = findCurrentShow()
+                        val endEpoch = currentShow?.endEpoch ?: return
+                        val remainingShowTimeMS = endEpoch - Calendar.getInstance().time.time
                         val diffOfPlaybackPosition = (player.contentDuration - remainingShowTimeMS) - player.contentPosition
 
                         if(diffOfPlaybackPosition> 10000 && arrayOf("154","155","162","289","291","471","474","476","483","514","524","525","872","1393","1396").contains(metadata.id)){
-                            var seekPostion =  player.contentDuration - remainingShowTimeMS
+                            val seekPostion = player.contentDuration - remainingShowTimeMS
                             Timber.d("SEEK POSITION ======" + seekPostion.toString()+ " contentDuration === "+ player.contentDuration)
                             seekTo(seekPostion)
                         }

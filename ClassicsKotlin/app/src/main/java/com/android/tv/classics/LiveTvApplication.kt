@@ -19,6 +19,7 @@ class LiveTvApplication : Application() {
     companion object {
         const val TAG = "LiveTvApplication"
         private var mobileNumber: String? = null
+        private var otpIdentifier: String? = null  // v2 auth: identifier returned by sendOTP
         private lateinit var httpStore: HttpStore
         private lateinit var prefStore: PrefStore
         private var instance: LiveTvApplication? = null
@@ -72,6 +73,17 @@ class LiveTvApplication : Application() {
                 FirebaseAuthManager.setUserMetadata(mobileNumber!!)
 //                initCloudSettings()
             }
+        }
+
+        /** Stores the OTP identifier returned by JioTVPlus v2 sendOTP endpoint. */
+        fun setOtpIdentifier(identifier: String) {
+            otpIdentifier = identifier
+            prefStore.saveData("otpIdentifier", identifier)
+        }
+
+        /** Returns the stored OTP identifier (needed for verifyOTP step). */
+        fun getOtpIdentifier(): String? {
+            return otpIdentifier ?: prefStore.getData("otpIdentifier")?.takeIf { it.isNotEmpty() }
         }
 
         fun getAuthHeaders(): Map<String, Any> {

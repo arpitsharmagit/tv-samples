@@ -1,6 +1,7 @@
 package com.android.tv.classics.fragments
 
 import android.os.Bundle
+import android.text.InputType
 import android.util.Log
 import android.view.View
 import androidx.appcompat.content.res.AppCompatResources
@@ -22,6 +23,7 @@ class MobileStepFragment: GuidedStepSupportFragment() {
     companion object {
         private val TAG = MobileStepFragment::class.java.simpleName
         private const val NEXT = 1L
+        private const val MOBILE_ID = 2L
     }
 
     override fun onCreateGuidance(savedInstanceState: Bundle?): Guidance {
@@ -30,10 +32,26 @@ class MobileStepFragment: GuidedStepSupportFragment() {
     }
 
     override fun onCreateActions(actions: MutableList<GuidedAction>, savedInstanceState: Bundle?) {
-        val mobileEditor = GuidedAction.Builder(activity).infoOnly(true).title("Mobile Number").description("9310949577").build()
+        val savedNumber = LiveTvApplication.getMobileNumber() ?: ""
+        val mobileEditor = GuidedAction.Builder(activity)
+            .id(MOBILE_ID)
+            .title("Mobile Number")
+            .description(savedNumber)
+            .descriptionEditable(true)
+            .inputType(InputType.TYPE_CLASS_NUMBER)
+            .build()
         val nextAction = GuidedAction.Builder(activity).id(NEXT).title("Login").build()
         actions.add(mobileEditor)
         actions.add(nextAction)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Auto-focus the mobile number input field
+        view?.post {
+            setSelectedActionPosition(0)
+            try { openInEditMode(findActionById(MOBILE_ID)) } catch (_: Exception) {}
+        }
     }
     
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
