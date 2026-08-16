@@ -289,20 +289,6 @@ class MainActivity : FragmentActivity() {
                     Timber.e( "Error refreshing token", e)
                 }
             }
-            // Auto-resume last playing channel if one was saved
-            val lastChannelId = LiveTvApplication.getPrefStore().getData("lastChannelId")
-            if (lastChannelId != null) {
-                Timber.d("Resuming last channel: $lastChannelId")
-                lifecycleScope.launch {
-                    val metadata = withContext(Dispatchers.IO) { db.metadata().findById(lastChannelId) }
-                    if (metadata != null) {
-                        withContext(Dispatchers.Main) {
-                            Navigation.findNavController(activity, R.id.fragment_container)
-                                .navigate(NavGraphDirections.actionToNowPlaying(metadata))
-                        }
-                    }
-                }
-            }
         } else {
             Navigation.findNavController(activity, R.id.fragment_container)
                 .navigate(NavGraphDirections.actionMobileStep())

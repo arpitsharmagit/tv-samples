@@ -248,6 +248,39 @@ class TvMediaSynchronizer(private val context: Context, params: WorkerParameters
 //            }
         }
 
+        /**
+         * Re-fetches channels and replaces the local DB copies for both metadata and collections.
+         * Returns true when refresh data is available and persisted successfully.
+         */
+        @Synchronized fun refreshAndReplace(context: Context): Boolean {
+            Timber.d("Starting manual refresh and replace")
+            val database = TvMediaDatabase.getInstance(context)
+
+            return try {
+                runBlocking {
+                    val feed = parseMediaFeed(context)
+                    if (feed.metadata.isEmpty() && feed.collections.isEmpty()) {
+                        Timber.w("Refresh aborted: no metadata or collections fetched")
+                        return@runBlocking false
+                    }
+
+                    database.metadata().truncate()
+                    database.collections().truncate()
+
+                    if (feed.metadata.isNotEmpty()) {
+                        database.metadata().insert(*feed.metadata.toTypedArray())
+                    }
+                    if (feed.collections.isNotEmpty()) {
+                        database.collections().insert(*feed.collections.toTypedArray())
+                    }
+                    true
+                }
+            } catch (e: Exception) {
+                Timber.e("Error while refreshing channels", e)
+                false
+            }
+        }
+
 
     }
 }

@@ -149,6 +149,7 @@ class MediaBrowserFragment : BrowseSupportFragment() {
             when (metadata.id) {
                 "log_viewer"      -> startActivity(Intent(requireContext(), LogViewerActivity::class.java))
                 "check_updates"   -> checkForUpdatesManually()
+                "refresh_channels" -> refreshChannelsManually()
                 "hidden_channels" -> showHiddenChannels()
                 else -> Navigation.findNavController(
                         requireActivity(), R.id.fragment_container).navigate(
@@ -306,6 +307,14 @@ class MediaBrowserFragment : BrowseSupportFragment() {
                 contentUri = Uri.EMPTY,
                 artUri = null
             ))
+            add(TvMediaMetadata(
+                id = "refresh_channels",
+                title = "Refresh Channels",
+                lang = "6",
+                collectionId = "8",
+                contentUri = Uri.EMPTY,
+                artUri = null
+            ))
         }
         collectionRows.add(ListRow(settingsHeader, settingsAdapter))
 
@@ -382,6 +391,26 @@ class MediaBrowserFragment : BrowseSupportFragment() {
                 LeanbackUpdateDialogFragment.show(requireActivity(), updateInfo)
             } else {
                 LiveTvApplication.showToast("You're on the latest version (${BuildConfig.VERSION_NAME})")
+            }
+        }
+    }
+
+    /** Triggered when user manually selects "Refresh Channels". */
+    private fun refreshChannelsManually() {
+        LiveTvApplication.showToast("Refreshing channels…")
+        lifecycleScope.launch {
+            val refreshed = withContext(Dispatchers.IO) {
+                TvMediaSynchronizer.refreshAndReplace(requireContext())
+            }
+            if (!isAdded) return@launch
+
+            if (refreshed) {
+                withContext(Dispatchers.IO) {
+                    populateAdapter(adapter as ArrayObjectAdapter)
+                }
+                LiveTvApplication.showToast("Channels refreshed successfully")
+            } else {
+                LiveTvApplication.showToast("Failed to refresh channels")
             }
         }
     }

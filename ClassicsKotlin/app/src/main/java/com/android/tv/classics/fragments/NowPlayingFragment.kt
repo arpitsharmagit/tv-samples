@@ -1048,9 +1048,6 @@ class NowPlayingFragment : VideoSupportFragment() {
         super.onPause()
 
         try {
-            // Save last playing channel so MainActivity can auto-resume after process death
-            LiveTvApplication.getPrefStore().saveData("lastChannelId", metadata.id)
-
             // Pause the player
             playerGlue.pause()
             
